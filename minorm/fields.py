@@ -1,3 +1,4 @@
+from minorm.db import SQLiteDatabase
 
 
 class Field:
@@ -68,3 +69,21 @@ class CharField(_StringField):
 
     def get_field_type(self):
         return f'VARCHAR({self.max_length})'
+
+
+class PrimaryKey(Field):
+
+    def __init__(self, **kwargs):
+        kwargs['null'] = False
+        kwargs['unique'] = True
+
+        super().__init__(**kwargs)
+        self.db = kwargs['db']
+
+    def get_field_type(self):
+        if isinstance(self.db, SQLiteDatabase):
+            return 'INT PRIMARY KEY AUTOINCREMENT'
+
+        # TODO: add support of more others databases
+
+        raise ValueError('Unsupported DB type.')

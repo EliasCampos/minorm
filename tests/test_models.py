@@ -63,3 +63,4 @@ class TestModel:
         person = Person(name="john")
         assert person.name == "john"
         assert person.age == 19
+        assert person.pk is None

@@ -1,6 +1,7 @@
 import pytest
 
-from minorm.fields import Field, CharField
+from minorm.db import SQLiteDatabase
+from minorm.fields import Field, CharField, PrimaryKey
 
 
 class TestField:
@@ -37,3 +38,12 @@ class TestCharField:
     def test_adapt(self, value, expected):
         char_field = CharField(max_length=255)
         assert char_field.adapt(value) == expected
+
+
+class TestPrimaryKey:
+
+    def test_get_field_type(self):
+        db = SQLiteDatabase('sqlite://')
+
+        pk = PrimaryKey(db=db)
+        assert pk.get_field_type() == "INT PRIMARY KEY AUTOINCREMENT"

@@ -44,6 +44,52 @@ class TestModel:
         assert isinstance(query, QueryExpression)
         assert query.model == Person
 
+    def test_to_sql(self, mocker, fake_db):
+        mocker.patch('minorm.models.get_default_db')
+
+        class Person(Model):
+            name = CharField(max_length=50)
+            age = IntegerField(null=True, default=42)
+
+            class Meta:
+                db = fake_db
+
+        assert Person.to_sql() == ("CREATE TABLE person ("
+                                   "name VARCHAR(50) NOT NULL, "
+                                   "age INTEGER DEFAULT 42, "
+                                   "id INTEGER PRIMARY KEY AUTOINCREMENT);")
+
+    def test_create_table(self, test_db):
+        class Person(Model):
+            name = CharField(max_length=50)
+            age = IntegerField(null=True, default=42)
+
+            class Meta:
+                db = test_db
+
+        Person.create_table()
+
+        select_tables_query = "SELECT name FROM sqlite_master WHERE type='table'"
+        result = test_db.execute(select_tables_query, fetch=True)
+        assert (Person._meta.table_name, ) in result
+
+    def test_drop_table(self, test_db):
+        select_tables_query = "CREATE TABLE test_table (id INTEGER PRIMARY KEY AUTOINCREMENT, x INTEGER)"
+        test_db.execute(select_tables_query)
+
+        class Person(Model):
+            x = IntegerField(null=True)
+
+            class Meta:
+                table_name = "test_table"
+                db = test_db
+
+        Person.drop_table()
+
+        select_tables_query = "SELECT name FROM sqlite_master WHERE type='table'"
+        result = test_db.execute(select_tables_query, fetch=True)
+        assert (Person._meta.table_name, ) not in result
+
     def test_check_field(self, mocker):
         mocker.patch('minorm.models.get_default_db')
 

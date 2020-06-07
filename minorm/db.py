@@ -45,18 +45,18 @@ class Database:
             self._connection.close()
             self._connection = None
 
-    def execute(self, raw_sql, params, fetch=False):
+    def execute(self, raw_sql, params=(), fetch=False):
         if not self._connection:
             return None
 
         with self._connection:
-            with self._connection.cursor() as cur:
-                cur.execute(raw_sql, params)
+            cur = self._connection.cursor()
+            cur.execute(raw_sql, params)
 
-                self.last_query_rowcount = cur.rowcount
-                self.last_query_lastrowid = cur.lastrowid
+            self.last_query_rowcount = cur.rowcount
+            self.last_query_lastrowid = cur.lastrowid
 
-                return cur.fetchall() if fetch else None
+            return cur.fetchall() if fetch else None
 
     def get_driver(self):
         raise NotImplementedError

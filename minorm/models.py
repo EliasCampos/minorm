@@ -3,6 +3,7 @@ from collections import namedtuple, OrderedDict
 from minorm.db import get_default_db
 from minorm.fields import Field, PrimaryKey
 from minorm.managers import QueryExpression
+from minorm.queries import CreateTableQuery, DropTableQuery
 
 
 model_param_class = namedtuple('Meta', 'db, table_name')
@@ -28,7 +29,7 @@ class ModelMeta(type):
         table_name = getattr(meta, 'table_name', name.lower())
         db = getattr(meta, 'db', None) or get_default_db()
 
-        fields[mcs.PK_FIELD] = PrimaryKey(db=db)
+        fields[mcs.PK_FIELD] = PrimaryKey(db=db, column_name=mcs.PK_FIELD)
 
         # Create and set params:
         model = super().__new__(mcs, name, bases, namespace)
@@ -43,6 +44,20 @@ class ModelMeta(type):
     @property
     def fields(cls):
         return {name: field for name, field in cls._fields.items() if name != cls.PK_FIELD}
+
+    def to_sql(cls):
+        field_params = [field.to_sql_declaration() for field in cls._fields.values()]
+        create_query = CreateTableQuery(db=cls._meta.db, table_name=cls._meta.table_name, params=field_params)
+        return str(create_query)
+
+    def create_table(cls):
+        field_params = [field.to_sql_declaration() for field in cls._fields.values()]
+        create_query = CreateTableQuery(db=cls._meta.db, table_name=cls._meta.table_name, params=field_params)
+        return create_query.execute()
+
+    def drop_table(cls):
+        drop_query = DropTableQuery(db=cls._meta.db, table_name=cls._meta.table_name)
+        return drop_query.execute()
 
     def check_field(cls, field_name):
         if field_name not in cls.fields and field_name != cls.PK_FIELD:

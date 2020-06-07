@@ -1,12 +1,16 @@
 from minorm.db import SQLiteDatabase
 
 
+class NoVal:
+    pass
+
+
 class Field:
     FIELD_TYPE = None
 
     NULL = 'NULL'
 
-    def __init__(self, null=False, unique=False, default=None, column_name=None, **extra_kwargs):
+    def __init__(self, null=False, unique=False, default=NoVal, column_name=None, **extra_kwargs):
         self.null = null
         self.unique = unique
 
@@ -19,7 +23,7 @@ class Field:
         return value
 
     def to_sql_value(self, value):
-        if value is None:
+        if value is None and self.null:
             return self.NULL
 
         return str(value)
@@ -31,7 +35,7 @@ class Field:
             declaration_parts.append('NOT NULL')
         if self.unique:
             declaration_parts.append('UNIQUE')
-        if self.default is not None or self.null:
+        if self.default is not NoVal:
             default_value = self.to_sql_value(self.default)
             declaration_parts.append(f'DEFAULT {default_value}')
 
@@ -46,7 +50,7 @@ class Field:
 
 
 class IntegerField(Field):
-    FIELD_TYPE = 'INT'
+    FIELD_TYPE = 'INTEGER'
     adapt = int
 
 
@@ -62,7 +66,7 @@ class _StringField(Field):
 
 class CharField(_StringField):
 
-    def __init__(self, null=False, unique=False, default=None, column_name=None, **extra_kwargs):
+    def __init__(self, null=False, unique=False, default=NoVal, column_name=None, **extra_kwargs):
         max_length = extra_kwargs.pop('max_length')
         super().__init__(null=null, unique=unique, default=default, column_name=column_name, **extra_kwargs)
         self.max_length = min(int(max_length), 255)
@@ -74,15 +78,15 @@ class CharField(_StringField):
 class PrimaryKey(Field):
 
     def __init__(self, **kwargs):
-        kwargs['null'] = False
-        kwargs['unique'] = True
+        kwargs['null'] = True
+        kwargs['unique'] = False
 
         super().__init__(**kwargs)
         self.db = kwargs['db']
 
     def get_field_type(self):
         if isinstance(self.db, SQLiteDatabase):
-            return 'INT PRIMARY KEY AUTOINCREMENT'
+            return 'INTEGER PRIMARY KEY AUTOINCREMENT'
 
         # TODO: add support of more others databases
 

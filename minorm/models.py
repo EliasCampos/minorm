@@ -45,6 +45,14 @@ class ModelMetaclass(type):
     def fields(cls):
         return {name: field for name, field in cls._fields.items() if name != cls.PK_FIELD}
 
+    @property
+    def db(cls):
+        return cls._meta.db
+
+    @property
+    def table_name(cls):
+        return cls._meta.table_name
+
     def to_sql(cls):
         field_params = [field.to_sql_declaration() for field in cls._fields.values()]
         create_query = CreateTableQuery(db=cls._meta.db, table_name=cls._meta.table_name, params=field_params)
@@ -60,7 +68,7 @@ class ModelMetaclass(type):
         return drop_query.execute()
 
     def check_field(cls, field_name):
-        if field_name not in cls.fields and field_name != cls.PK_FIELD:
+        if field_name not in cls.fields:
             raise ValueError(f'{field_name} is not a valid field for model {cls.__name__}.')
 
     def field_to_sql(cls, field_name, value):

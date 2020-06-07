@@ -44,3 +44,24 @@ class TestQueryExpression:
 
         assert result is query
         assert result._order_by == {OrderByExpression('foo', 'ASC'), OrderByExpression('bar', 'DESC')}
+
+    def test_update(self, test_model):
+        db = test_model.db
+
+        db.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('John', 19))
+        test_model.query.update(age=42)
+
+        results = db.execute('SELECT name, age FROM person;', fetch=True)
+        assert results[0][1] == 42
+
+    def test_update_filter(self, test_model):
+        db = test_model.db
+
+        db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 5), ('z', 1)])
+
+        test_model.query.filter(age__lt=5).update(name="test")
+
+        assert db.last_query_rowcount == 2
+
+        results = db.execute('SELECT * FROM person WHERE name = ?;', ('test', ), fetch=True)
+        assert len(results) == 2

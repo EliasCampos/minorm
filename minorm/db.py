@@ -45,13 +45,17 @@ class Database:
             self._connection.close()
             self._connection = None
 
-    def execute(self, raw_sql, params=(), fetch=False):
+    def execute(self, raw_sql, params=(), fetch=False, many=False):
         if not self._connection:
             return None
 
+        params = tuple(params)
         with self._connection:
             cur = self._connection.cursor()
-            cur.execute(raw_sql, params)
+            if many:
+                cur.executemany(raw_sql, params)
+            else:
+                cur.execute(raw_sql, params)
 
             self.last_query_rowcount = cur.rowcount
             self.last_query_lastrowid = cur.lastrowid
@@ -63,6 +67,7 @@ class Database:
 
 
 class SQLiteDatabase(Database):
+    VAL_PLACE = '?'
 
     def get_driver(self):
         import sqlite3

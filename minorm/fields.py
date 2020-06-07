@@ -26,7 +26,7 @@ class Field:
         if value is None and self.null:
             return self.NULL
 
-        return str(value)
+        return value
 
     def to_sql_declaration(self):
         declaration_parts = [f'{self.column_name} {self.get_field_type()}']

@@ -1,7 +1,9 @@
+from collections import OrderedDict
 import functools
 import operator
 
 from minorm.expressions import OrderByExpression, WhereCondition
+from minorm.queries import UpdateQuery
 
 
 class QueryExpression:
@@ -28,6 +30,19 @@ class QueryExpression:
             self.model.check_field(order_exp.value)
             self._order_by.add(order_exp)
         return self
+
+    def update(self, **kwargs):
+        update_data = OrderedDict()
+
+        for key, value in kwargs.items():
+            self.model.check_field(key)
+            field = self.model.fields[key]
+            adopted_value = field.adapt(value)
+            update_data[field.column_name] = adopted_value
+
+        update_query = UpdateQuery(db=self.model.db, table_name=self.model.table_name, fields=update_data.keys(),
+                                   where=self._where)
+        update_query.execute(params=update_data.values())
 
     def _where_action(self, *args, **kwargs):
         where_conds = list(args)

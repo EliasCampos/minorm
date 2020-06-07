@@ -13,13 +13,13 @@ class TestField:
         assert Foo.bar.column_name == 'bar'
 
     def test_to_sql_declaration(self, mocker):
-        mocker.patch.object(Field, 'get_field_type', lambda obj: 'INT')
+        mocker.patch.object(Field, 'get_field_type', lambda obj: 'INTEGER')
 
         unique_field = Field(null=False, unique=True, default=42, column_name='test')
-        assert unique_field.to_sql_declaration() == 'test INT NOT NULL UNIQUE DEFAULT 42'
+        assert unique_field.to_sql_declaration() == 'test INTEGER NOT NULL UNIQUE DEFAULT 42'
 
         non_unique = Field(null=True, unique=False, column_name='test', default=None)
-        assert non_unique.to_sql_declaration() == 'test INT DEFAULT NULL'
+        assert non_unique.to_sql_declaration() == 'test INTEGER DEFAULT NULL'
 
 
 class TestCharField:
@@ -32,7 +32,7 @@ class TestCharField:
         'value, expected', [
             pytest.param("Foo bar", 'Foo bar', id='string-value'),
             pytest.param(b'test', 'test', id='bytes-value'),
-            pytest.param(42, '42', id='integer-value'),
+            pytest.param(42, '42', id='int-value'),
         ]
     )
     def test_adapt(self, value, expected):
@@ -46,4 +46,4 @@ class TestPrimaryKey:
         db = SQLiteDatabase('sqlite://')
 
         pk = PrimaryKey(db=db)
-        assert pk.get_field_type() == "INT PRIMARY KEY AUTOINCREMENT"
+        assert pk.get_field_type() == "INTEGER PRIMARY KEY AUTOINCREMENT"

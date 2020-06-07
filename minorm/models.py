@@ -6,10 +6,10 @@ from minorm.managers import QueryExpression
 from minorm.queries import CreateTableQuery, DropTableQuery
 
 
-model_param_class = namedtuple('Meta', 'db, table_name')
+model_metadata = namedtuple('Meta', 'db, table_name')
 
 
-class ModelMeta(type):
+class ModelMetaclass(type):
     PK_FIELD = 'id'
 
     def __new__(mcs, name, bases, namespace):
@@ -34,7 +34,7 @@ class ModelMeta(type):
         # Create and set params:
         model = super().__new__(mcs, name, bases, namespace)
         setattr(model, '_fields', fields)
-        setattr(model, '_meta', model_param_class(db=db, table_name=table_name))
+        setattr(model, '_meta', model_metadata(db=db, table_name=table_name))
         return model
 
     @property
@@ -68,7 +68,7 @@ class ModelMeta(type):
         return field.to_sql_value(value)
 
 
-class Model(metaclass=ModelMeta):
+class Model(metaclass=ModelMetaclass):
 
     def __init__(self, **kwargs):
         setattr(self, self.__class__.PK_FIELD, None)
@@ -78,4 +78,4 @@ class Model(metaclass=ModelMeta):
 
     @property
     def pk(self):
-        return self.id
+        return getattr(self, self.__class__.PK_FIELD)

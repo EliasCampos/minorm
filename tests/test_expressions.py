@@ -51,3 +51,26 @@ class TestWhereCondition:
         where_cond2 = WhereCondition(field='y', op='=', value='5')
 
         assert str(~(where_cond1 & where_cond2)) == "NOT (x = 3 AND y = 5)"
+
+    @pytest.mark.parametrize(
+        'lookup, expected_op', [
+            ('lt', '<'),
+            ('lte', '<='),
+            ('gt', '>'),
+            ('gte', '>='),
+            ('in', 'IN'),
+            ('neq', '!='),
+        ]
+    )
+    def test_resolve_lookup(self, lookup, expected_op):
+        field = f'test__{lookup}'
+        assert WhereCondition.resolve_lookup(field) == ('test', expected_op)
+
+    def test_resolve_lookup_eq(self):
+        field = f'test'
+        assert WhereCondition.resolve_lookup(field) == ('test', '=')
+
+    def test_resolve_lookup_value_error(self):
+        invalid_lookup = 'foobar'
+        with pytest.raises(ValueError, match=r'.*lookup.*'):
+            WhereCondition.resolve_lookup(f'test__{invalid_lookup}')

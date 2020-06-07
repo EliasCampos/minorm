@@ -1,10 +1,21 @@
 
 
 class WhereCondition:
+    LOOKUPS = (
+        ('lt', '<'),
+        ('lte', '<='),
+        ('gt', '>'),
+        ('gte', '>='),
+        ('in', 'IN'),
+        ('neq', '!='),
+    )
+
     AND = 'AND'
     OR = 'OR'
 
     NOT = 'NOT'
+
+    EQ = '='
 
     def __init__(self, field, op, value):
         self.field = field
@@ -41,3 +52,18 @@ class WhereCondition:
     def __invert__(self):
         self._negated = not self._negated
         return self
+
+    @classmethod
+    def resolve_lookup(cls, field_name):
+        parts = field_name.split('__')
+        field = parts[0]
+        if len(parts) == 2:
+            lookups = dict(cls.LOOKUPS)
+            if parts[1] not in lookups:
+                raise ValueError(f'Invalid lookup expression: {parts[1]}')
+            lookup = lookups[parts[1]]
+        else:
+            lookup = cls.EQ
+
+        return field, lookup
+

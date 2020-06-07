@@ -1,7 +1,7 @@
 import pytest
 
 from minorm.db import SQLiteDatabase
-from minorm.fields import Field, CharField, PrimaryKey
+from minorm.fields import Field, CharField, PrimaryKey, ForeignKey
 
 
 class TestField:
@@ -43,7 +43,16 @@ class TestCharField:
 class TestPrimaryKey:
 
     def test_get_field_type(self):
-        db = SQLiteDatabase('sqlite://')
+        pk = PrimaryKey(auto_increment='SERIAL')
+        assert pk.get_field_type() == "INTEGER PRIMARY KEY SERIAL"
 
-        pk = PrimaryKey(db=db)
-        assert pk.get_field_type() == "INTEGER PRIMARY KEY AUTOINCREMENT"
+
+class TestForeignKey:
+
+    def test_get_field_type(self, test_model):
+        fk = ForeignKey(null=False, to=test_model, on_delete=ForeignKey.CASCADE)
+        assert fk.get_field_type() == "INTEGER REFERENCES person (id)"
+
+    def test_column_name(self, test_model):
+        fk = ForeignKey(null=False, to=test_model, on_delete=ForeignKey.RESTRICT)
+        assert fk.column_name == "person_id"

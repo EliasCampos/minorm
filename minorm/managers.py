@@ -42,7 +42,8 @@ class QueryExpression:
 
         update_query = UpdateQuery(db=self.model.db, table_name=self.model.table_name, fields=update_data.keys(),
                                    where=self._where)
-        update_query.execute(params=update_data.values())
+        params = tuple(update_data.values()) + (self._where.values() if self._where else ())
+        update_query.execute(params=params)
 
     def create(self, **kwargs):
         instance = self.model(**kwargs)
@@ -55,9 +56,10 @@ class QueryExpression:
         for key, value in kwargs.items():
             field_name, op = WhereCondition.resolve_lookup(key)
             self.model.check_field(field_name)
-            sql_value = self.model.field_to_sql(field_name, value)
+            field = self.model.fields[field_name]
+            adopted_value = field.to_query_parameter(value)
 
-            where_cond = WhereCondition(field_name, op, sql_value)
+            where_cond = WhereCondition(field.column_name, op, adopted_value, val_place=self.model.db.VAL_PLACE)
             where_conds.append(where_cond)
 
         result = functools.reduce(operator.and_, where_conds)

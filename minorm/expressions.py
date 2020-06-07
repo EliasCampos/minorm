@@ -18,10 +18,12 @@ class WhereCondition:
 
     EQ = '='
 
-    def __init__(self, field, op, value):
+    def __init__(self, field, op, value, val_place='?'):
         self.field = field
         self.op = op
         self.value = value
+
+        self.val_place = val_place
 
         self._and = None
         self._or = None
@@ -29,7 +31,7 @@ class WhereCondition:
         self._negated = False
 
     def __str__(self):
-        result = f'{self.field} {self.op} {self.value}'
+        result = f'{self.field} {self.op} {self.val_place}'
 
         if self._and:
             result = f'{result} {self.AND} {self._and}'
@@ -39,6 +41,17 @@ class WhereCondition:
 
         if self._negated:
             result = f'{self.NOT} ({result})'
+
+        return result
+
+    def values(self):
+        result = (self.value, )
+
+        if self._and:
+            result += self._and.values()
+
+        if self._or:
+            result += self._or.values()
 
         return result
 

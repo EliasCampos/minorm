@@ -1,7 +1,7 @@
 from collections import namedtuple, OrderedDict
 
 from minorm.db import get_default_db
-from minorm.fields import Field, PrimaryKey
+from minorm.fields import Field, PrimaryKey, NoVal
 from minorm.managers import QueryExpression
 from minorm.queries import CreateTableQuery, DropTableQuery, InsertQuery, UpdateQuery
 
@@ -16,8 +16,6 @@ class ModelMetaclass(type):
         if not bases:
             return super().__new__(mcs, name, bases, namespace)
 
-        namespace.pop(mcs.PK_FIELD, None)
-
         # Extract fields:
         fields = OrderedDict()
         for attr_name, class_attr in namespace.items():
@@ -29,7 +27,7 @@ class ModelMetaclass(type):
         table_name = getattr(meta, 'table_name', name.lower())
         db = getattr(meta, 'db', None) or get_default_db()
 
-        fields[mcs.PK_FIELD] = PrimaryKey(db=db, column_name=mcs.PK_FIELD)
+        fields[mcs.PK_FIELD] = PrimaryKey(column_name=mcs.PK_FIELD)
 
         # Create and set params:
         model = super().__new__(mcs, name, bases, namespace)
@@ -70,10 +68,6 @@ class ModelMetaclass(type):
     def check_field(cls, field_name):
         if field_name not in cls.fields:
             raise ValueError(f'{field_name} is not a valid field for model {cls.__name__}.')
-
-    def field_to_sql(cls, field_name, value):
-        field = cls.fields[field_name]
-        return field.to_sql_value(value)
 
 
 class Model(metaclass=ModelMetaclass):

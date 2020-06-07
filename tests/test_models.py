@@ -1,7 +1,7 @@
 import pytest
 
 from minorm.db import SQLiteDatabase
-from minorm.fields import CharField, IntegerField
+from minorm.fields import CharField, IntegerField, ForeignKey
 from minorm.managers import QueryExpression
 from minorm.models import Model
 
@@ -49,14 +49,18 @@ class TestModel:
 
         class Person(Model):
             name = CharField(max_length=50)
+            last_name = CharField(max_length=44, null=True)
             age = IntegerField(null=True, default=42)
+            score = IntegerField(null=True, default=None)
 
             class Meta:
                 db = fake_db
 
         assert Person.to_sql() == ("CREATE TABLE person ("
                                    "name VARCHAR(50) NOT NULL, "
+                                   "last_name VARCHAR(44), "
                                    "age INTEGER DEFAULT 42, "
+                                   "score INTEGER DEFAULT NULL, "
                                    "id INTEGER PRIMARY KEY AUTOINCREMENT);")
 
     def test_create_table(self, test_db):
@@ -127,3 +131,16 @@ class TestModel:
 
         assert instance.pk == 1
         assert instance.age == 42
+
+    def test_save_with_fk(self, related_models):
+        model_with_fk, external_model = related_models
+
+        author = external_model(name='Steven', age=19)
+        author.save()
+
+        book = model_with_fk(author=author)
+        book.title = "The Dark Tower"
+        book.save()
+
+        assert book.pk == 1
+        assert book.author == author.pk

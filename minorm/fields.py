@@ -1,4 +1,3 @@
-from minorm.db import SQLiteDatabase
 
 
 class NoVal:
@@ -22,11 +21,11 @@ class Field:
     def adapt(self, value):
         return value
 
-    def to_sql_value(self, value):
-        if value is None and self.null:
-            return self.NULL
-
+    def to_query_parameter(self, value):
         return value
+
+    def default_declaration(self):
+        return str(self.default)
 
     def to_sql_declaration(self):
         declaration_parts = [f'{self.column_name} {self.get_field_type()}']
@@ -36,8 +35,8 @@ class Field:
         if self.unique:
             declaration_parts.append('UNIQUE')
         if self.default is not NoVal:
-            default_value = self.to_sql_value(self.default)
-            declaration_parts.append(f'DEFAULT {default_value}')
+            default_sql = self.default_declaration() if self.default is not None else self.NULL
+            declaration_parts.append(f'DEFAULT {default_sql}')
 
         return ' '.join(declaration_parts)
 
@@ -57,6 +56,8 @@ class IntegerField(Field):
 class _StringField(Field):
 
     def adapt(self, value):
+        if not value:
+            return ''
         if isinstance(value, str):
             return value
         if isinstance(value, bytes):
@@ -82,12 +83,38 @@ class PrimaryKey(Field):
         kwargs['unique'] = False
 
         super().__init__(**kwargs)
-        self.db = kwargs['db']
 
     def get_field_type(self):
-        if isinstance(self.db, SQLiteDatabase):
-            return 'INTEGER PRIMARY KEY AUTOINCREMENT'
+        auto_increment = self.extra_kwargs.get('auto_increment', 'AUTOINCREMENT')
+        return f'INTEGER PRIMARY KEY {auto_increment}'
 
-        # TODO: add support of more others databases
 
-        raise ValueError('Unsupported DB type.')
+class ForeignKey(Field):
+    CASCADE = 'CASCADE'
+    RESTRICT = 'RESTRICT'
+    SET_NULL = 'SET NULL'
+    SET_DEFAULT = 'SET DEFAULT'
+
+    def __init__(self, null=False, unique=False, default=NoVal, column_name=None, **extra_kwargs):
+        ref_model = extra_kwargs.pop('to')
+        on_delete = extra_kwargs.pop('on_delete')
+
+        if not column_name:
+            column_name = f"{ref_model.table_name}_id"
+
+        super().__init__(null=null, unique=unique, default=default, column_name=column_name, **extra_kwargs)
+        self.to = ref_model
+        self.on_delete = on_delete
+
+    def adapt(self, value):
+        if value is None:
+            return None
+        if isinstance(value, self.to):
+            return value.pk
+        return int(value)
+
+    def to_query_parameter(self, value):
+        return value.pk if isinstance(value, self.to) else value
+
+    def get_field_type(self):
+        return f'INTEGER REFERENCES {self.to.table_name} ({self.to.PK_FIELD})'

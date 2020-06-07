@@ -4,7 +4,7 @@ import operator
 
 from minorm.exceptions import MultipleQueryResult
 from minorm.expressions import OrderByExpression, WhereCondition
-from minorm.queries import UpdateQuery, SelectQuery
+from minorm.queries import InsertQuery, SelectQuery, UpdateQuery
 
 
 class QueryExpression:
@@ -68,6 +68,18 @@ class QueryExpression:
 
     def all(self):
         return [self.model.query_namedtuple._make(row) for row in self._extract()]
+
+    def bulk_create(self, instances):
+        model = self.model
+
+        field_names = model.fields.keys()
+        column_names = [field.column_name for field in model.fields.values()]
+        values = [[getattr(obj, name) for name in field_names] for obj in instances if isinstance(obj, model)]
+
+        operation = InsertQuery(db=model.db, table_name=model.table_name, fields=column_names)
+        operation.execute_many(params=values)
+
+        return model.db.last_query_rowcount
 
     def _where_action(self, *args, **kwargs):
         where_conds = list(args)

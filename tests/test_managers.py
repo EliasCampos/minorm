@@ -129,3 +129,18 @@ class TestQueryExpression:
         assert results[2].id == 3
         assert results[2].name == 'z'
         assert results[2].age == 6
+
+    def test_bulk_create(self, test_model):
+        instance1 = test_model(name='John', age=33)
+        instance2 = test_model(name='Dick', age=42)
+
+        result = test_model.query.bulk_create([instance1, instance2, 'foobar'])
+        assert result == 2
+
+        db = test_model.db
+
+        result1 = db.execute('SELECT * FROM person WHERE name = ? AND age = ?;', params=('John', 33), fetch=True)
+        assert result1
+
+        result2 = db.execute('SELECT * FROM person WHERE name = ? AND age = ?;', params=('Dick', 42), fetch=True)
+        assert result2

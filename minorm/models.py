@@ -102,7 +102,7 @@ class Model(metaclass=ModelMetaclass):
 
         model = self.__class__
 
-        fields = [field.column_name for field in model.fields.values()]
+        column_names = [field.column_name for field in model.fields.values()]
         values = [getattr(self, field_name) for field_name in model.fields.keys()]
 
         if is_creation:
@@ -110,7 +110,7 @@ class Model(metaclass=ModelMetaclass):
         else:
             operation_class = UpdateQuery
 
-        operation = operation_class(db=model.db, table_name=model.table_name, fields=fields)
+        operation = operation_class(db=model.db, table_name=model.table_name, fields=column_names)
         operation.execute(params=values)
 
         if is_creation:

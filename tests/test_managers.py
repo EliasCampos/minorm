@@ -65,3 +65,8 @@ class TestQueryExpression:
 
         results = db.execute('SELECT * FROM person WHERE name = ?;', ('test', ), fetch=True)
         assert len(results) == 2
+
+    def test_create(self, test_model):
+        test_model.query.create(name='Vasya', age=19)
+        results = test_model.db.execute('SELECT * FROM person WHERE id = ?;', (1,), fetch=True)
+        assert results

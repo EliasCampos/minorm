@@ -42,7 +42,23 @@ class DMLQuery:
         return self.db.execute(raw_sql, params, fetch=self.FETCH)
 
 
+class InsertQuery(DMLQuery):
+    FETCH = False
+
+    def __str__(self):
+        fields_part = ', '.join(self.fields)
+        values_part = ', '.join(self.db.VAL_PLACE for _ in self.fields)
+
+        result = f'INSERT INTO {self.table_name} ({fields_part}) VALUES ({values_part});'
+        return result
+
+    def execute_many(self, params):
+        raw_sql = str(self)
+        return self.db.execute(raw_sql, params, many=True)
+
+
 class UpdateQuery(DMLQuery):
+    FETCH = False
 
     def __str__(self):
         fields_part = ', '.join(f'{field} = {self.db.VAL_PLACE}' for field in self.fields)

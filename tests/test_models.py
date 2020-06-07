@@ -110,3 +110,20 @@ class TestModel:
         assert person.name == "john"
         assert person.age == 19
         assert person.pk is None
+
+    def test_save(self, test_model):
+        instance = test_model(name="john", age=33)
+        instance.save()
+
+        assert instance.pk == 1
+
+        instance2 = test_model(name="steven", age=19)
+        instance2.save()
+
+        assert instance2.pk == 2
+
+        instance.age = "42"
+        instance.save()
+
+        assert instance.pk == 1
+        assert instance.age == 42

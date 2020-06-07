@@ -44,6 +44,11 @@ class QueryExpression:
                                    where=self._where)
         update_query.execute(params=update_data.values())
 
+    def create(self, **kwargs):
+        instance = self.model(**kwargs)
+        instance.save()
+        return instance
+
     def _where_action(self, *args, **kwargs):
         where_conds = list(args)
 

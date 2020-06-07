@@ -62,6 +62,9 @@ class Database:
 
             return cur.fetchall() if fetch else None
 
+    def last_insert_row_id(self):
+        return self.last_query_lastrowid
+
     def get_driver(self):
         raise NotImplementedError
 

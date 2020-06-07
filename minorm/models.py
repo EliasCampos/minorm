@@ -3,7 +3,7 @@ from collections import namedtuple, OrderedDict
 from minorm.db import get_default_db
 from minorm.fields import Field, PrimaryKey
 from minorm.managers import QueryExpression
-from minorm.queries import CreateTableQuery, DropTableQuery
+from minorm.queries import CreateTableQuery, DropTableQuery, InsertQuery, UpdateQuery
 
 
 model_metadata = namedtuple('Meta', 'db, table_name')
@@ -43,7 +43,7 @@ class ModelMetaclass(type):
 
     @property
     def fields(cls):
-        return {name: field for name, field in cls._fields.items() if name != cls.PK_FIELD}
+        return OrderedDict((name, field) for name, field in cls._fields.items() if name != cls.PK_FIELD)
 
     @property
     def db(cls):
@@ -87,3 +87,28 @@ class Model(metaclass=ModelMetaclass):
     @property
     def pk(self):
         return getattr(self, self.__class__.PK_FIELD)
+
+    def save(self):
+        is_creation = not bool(self.pk)
+        self._adapt_values()
+
+        model = self.__class__
+
+        fields = [field.column_name for field in model.fields.values()]
+        values = [getattr(self, field_name) for field_name in model.fields.keys()]
+
+        if is_creation:
+            operation_class = InsertQuery
+        else:
+            operation_class = UpdateQuery
+
+        operation = operation_class(db=model.db, table_name=model.table_name, fields=fields)
+        operation.execute(params=values)
+
+        if is_creation:
+            setattr(self, self.__class__.PK_FIELD, model.db.last_insert_row_id())
+
+    def _adapt_values(self):
+        for name, field in self.__class__.fields.items():
+            adapted_value = field.adapt(getattr(self, name))
+            setattr(self, name, adapted_value)

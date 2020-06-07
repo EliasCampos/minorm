@@ -39,6 +39,9 @@ class ModelMetaclass(type):
         does_not_exists = type(f'{model.__name__}DoesNotExists', (DoesNotExists, ), {})
         setattr(model, 'DoesNotExists', does_not_exists)
 
+        query_namedtuple = namedtuple(f'{model.__name__}QueryNamedTuple', field_names=model.column_names)
+        setattr(model, 'query_namedtuple', query_namedtuple)
+
         return model
 
     @property
@@ -56,6 +59,11 @@ class ModelMetaclass(type):
     @property
     def table_name(cls):
         return cls._meta.table_name
+
+    @property
+    def column_names(cls):
+        pk_field = cls.PK_FIELD
+        return [pk_field] + [field.column_name for field in cls.fields.values()]
 
     def to_sql(cls):
         field_params = [field.to_sql_declaration() for field in cls._fields.values()]

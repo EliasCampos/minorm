@@ -112,3 +112,20 @@ class TestQueryExpression:
 
         instance = test_model.query.filter(age=9000).first()
         assert not instance
+
+    def test_all(self, test_model):
+        db = test_model.db
+        db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 6), ('z', 6)])
+
+        results = test_model.query.all()
+        assert results[0].id == 1
+        assert results[0].name == 'x'
+        assert results[0].age == 3
+
+        assert results[1].id == 2
+        assert results[1].name == 'y'
+        assert results[1].age == 6
+
+        assert results[2].id == 3
+        assert results[2].name == 'z'
+        assert results[2].age == 6

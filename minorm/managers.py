@@ -66,6 +66,9 @@ class QueryExpression:
             return None
         return self._instance_from_result(results)
 
+    def all(self):
+        return [self.model.query_namedtuple._make(row) for row in self._extract()]
+
     def _where_action(self, *args, **kwargs):
         where_conds = list(args)
 
@@ -100,7 +103,7 @@ class QueryExpression:
 
         self._reset_where(where_cond, operator.and_)
 
-        fields = [pk_field] + [field.column_name for field in self.model.fields.values()]
+        fields = self.model.column_names
         select_query = SelectQuery(db=self.model.db, table_name=self.model.table_name, fields=fields,
                                    where=self._where, order_by=self._order_by)
 

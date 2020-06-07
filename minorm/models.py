@@ -1,7 +1,8 @@
 from collections import namedtuple, OrderedDict
 
 from minorm.db import get_default_db
-from minorm.fields import Field, PrimaryKey, NoVal
+from minorm.exceptions import DoesNotExists
+from minorm.fields import Field, PrimaryKey
 from minorm.managers import QueryExpression
 from minorm.queries import CreateTableQuery, DropTableQuery, InsertQuery, UpdateQuery
 
@@ -32,7 +33,12 @@ class ModelMetaclass(type):
         # Create and set params:
         model = super().__new__(mcs, name, bases, namespace)
         setattr(model, '_fields', fields)
+
         setattr(model, '_meta', model_metadata(db=db, table_name=table_name))
+
+        does_not_exists = type(f'{model.__name__}DoesNotExists', (DoesNotExists, ), {})
+        setattr(model, 'DoesNotExists', does_not_exists)
+
         return model
 
     @property

@@ -63,11 +63,32 @@ class UpdateQuery(DMLQuery):
     def __str__(self):
         fields_part = ', '.join(f'{field} = {self.db.VAL_PLACE}' for field in self.fields)
 
-        update = f'UPDATE {self.table_name} SET {fields_part}'
-        query_parts = [update]
+        update_str = f'UPDATE {self.table_name} SET {fields_part}'
+        query_parts = [update_str]
 
         if self.where:
             where_part = f'WHERE {self.where}'
             query_parts.append(where_part)
+
+        return f"{' '.join(query_parts)};"
+
+
+class SelectQuery(DMLQuery):
+    FETCH = True
+
+    def __str__(self):
+        fields_part = ', '.join(self.fields)
+
+        select_str = f'SELECT {fields_part} FROM {self.table_name}'
+        query_parts = [select_str]
+
+        if self.where:
+            where_part = f'WHERE {self.where}'
+            query_parts.append(where_part)
+
+        if self.order_by:
+            order_part = ', '.join(str(ordering) for ordering in self.order_by)
+            order_str = f'ORDER BY {order_part}'
+            query_parts.append(order_str)
 
         return f"{' '.join(query_parts)};"

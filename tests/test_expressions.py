@@ -1,6 +1,6 @@
 import pytest
 
-from minorm.expressions import WhereCondition
+from minorm.expressions import WhereCondition, OrderByExpression
 
 
 class TestWhereCondition:
@@ -74,3 +74,27 @@ class TestWhereCondition:
         invalid_lookup = 'foobar'
         with pytest.raises(ValueError, match=r'.*lookup.*'):
             WhereCondition.resolve_lookup(f'test__{invalid_lookup}')
+
+
+class TestOrderByExpression:
+
+    def test_from_field_name(self):
+        field1 = 'foo'
+        expr = OrderByExpression.from_field_name(field1)
+        assert expr.value == 'foo'
+        assert expr.ordering == 'ASC'
+
+        field2 = '-bar'
+        expr = OrderByExpression.from_field_name(field2)
+        assert expr.value == 'bar'
+        assert expr.ordering == 'DESC'
+
+    @pytest.mark.parametrize(
+        'value, ordering, expected_string', [
+            ['foo', OrderByExpression.ASC, 'foo ASC'],
+            ['bar', OrderByExpression.DESC, 'bar DESC'],
+        ]
+    )
+    def test_str(self, value, ordering, expected_string):
+        expr = OrderByExpression(value=value, ordering=ordering)
+        assert str(expr) == expected_string

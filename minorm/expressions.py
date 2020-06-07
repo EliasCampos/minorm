@@ -1,3 +1,4 @@
+from collections import namedtuple
 
 
 class WhereCondition:
@@ -67,3 +68,21 @@ class WhereCondition:
 
         return field, lookup
 
+
+class OrderByExpression(namedtuple('OrderByExpression', 'value, ordering')):
+    ASC = 'ASC'
+    DESC = 'DESC'
+
+    @classmethod
+    def from_field_name(cls, field_name):
+        if field_name.startswith('-'):
+            value = field_name[1:]
+            ordering = cls.DESC
+        else:
+            value = field_name
+            ordering = cls.ASC
+
+        return cls(value=value, ordering=ordering)
+
+    def __str__(self):
+        return f'{self.value} {self.ordering}'

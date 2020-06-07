@@ -5,6 +5,7 @@ from minorm.exceptions import DoesNotExists
 from minorm.fields import Field, PrimaryKey
 from minorm.managers import QueryExpression
 from minorm.queries import CreateTableQuery, DropTableQuery, InsertQuery, UpdateQuery
+from minorm.utils import pk_declaration_for_db
 
 
 model_metadata = namedtuple('Meta', 'db, table_name')
@@ -28,7 +29,7 @@ class ModelMetaclass(type):
         table_name = getattr(meta, 'table_name', name.lower())
         db = getattr(meta, 'db', None) or get_default_db()
 
-        fields[mcs.PK_FIELD] = PrimaryKey(column_name=mcs.PK_FIELD)
+        fields[mcs.PK_FIELD] = PrimaryKey(column_name=mcs.PK_FIELD, pk_declaration=pk_declaration_for_db(db))
 
         # Create and set params:
         model = super().__new__(mcs, name, bases, namespace)

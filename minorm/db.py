@@ -24,7 +24,14 @@ def get_default_db():
     return _default_db
 
 
+class DBDriver:
+    SQLITE = 'sqlite3'
+    POSTGRES = 'psycopg2'
+
+
 class Database:
+    DRIVER = None
+    VAL_PLACE = None
 
     def __init__(self, connection_string):
         self.connection_string = connection_string
@@ -66,15 +73,13 @@ class Database:
         return self.last_query_lastrowid
 
     def get_driver(self):
-        raise NotImplementedError
+        driver = __import__(self.DRIVER)
+        return driver
 
 
 class SQLiteDatabase(Database):
+    DRIVER = DBDriver.SQLITE
     VAL_PLACE = '?'
-
-    def get_driver(self):
-        import sqlite3
-        return sqlite3
 
 
 def read_connection_string():

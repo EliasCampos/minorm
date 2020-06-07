@@ -43,7 +43,7 @@ class TestCharField:
 class TestPrimaryKey:
 
     def test_get_field_type(self):
-        pk = PrimaryKey(auto_increment='SERIAL')
+        pk = PrimaryKey(auto_increment='SERIAL', pk_declaration='INTEGER PRIMARY KEY SERIAL')
         assert pk.get_field_type() == "INTEGER PRIMARY KEY SERIAL"
 
 

@@ -83,10 +83,10 @@ class PrimaryKey(Field):
         kwargs['unique'] = False
 
         super().__init__(**kwargs)
+        self.pk_declaration = kwargs['pk_declaration']
 
     def get_field_type(self):
-        auto_increment = self.extra_kwargs.get('auto_increment', 'AUTOINCREMENT')
-        return f'INTEGER PRIMARY KEY {auto_increment}'
+        return self.pk_declaration
 
 
 class ForeignKey(Field):

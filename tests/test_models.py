@@ -33,8 +33,9 @@ class TestModel:
         assert Person._meta.db == fake_db
         assert Person._meta.table_name == 'test_model_table'
 
-    def test_query(self, mocker):
-        mocker.patch('minorm.models.get_default_db')
+    def test_query(self, mocker, fake_db):
+        db_mock = mocker.patch('minorm.models.get_default_db')
+        db_mock.return_value = fake_db
 
         class Person(Model):
             name = CharField(max_length=255)
@@ -45,7 +46,8 @@ class TestModel:
         assert query.model == Person
 
     def test_to_sql(self, mocker, fake_db):
-        mocker.patch('minorm.models.get_default_db')
+        db_mock = mocker.patch('minorm.models.get_default_db')
+        db_mock.return_value = fake_db
 
         class Person(Model):
             name = CharField(max_length=50)
@@ -94,8 +96,9 @@ class TestModel:
         result = test_db.execute(select_tables_query, fetch=True)
         assert (Person._meta.table_name, ) not in result
 
-    def test_check_field(self, mocker):
-        mocker.patch('minorm.models.get_default_db')
+    def test_check_field(self, mocker, fake_db):
+        db_mock = mocker.patch('minorm.models.get_default_db')
+        db_mock.return_value = fake_db
 
         class Person(Model):
             name = CharField(max_length=120)
@@ -103,8 +106,9 @@ class TestModel:
         with pytest.raises(ValueError, match='.*age.*'):
             Person.check_field('age')
 
-    def test_init(self, mocker):
-        mocker.patch('minorm.models.get_default_db')
+    def test_init(self, mocker, fake_db):
+        db_mock = mocker.patch('minorm.models.get_default_db')
+        db_mock.return_value = fake_db
 
         class Person(Model):
             name = CharField(max_length=120)

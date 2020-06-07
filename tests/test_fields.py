@@ -1,6 +1,6 @@
 import pytest
 
-from minorm.fields import Field
+from minorm.fields import Field, CharField
 
 
 class TestField:
@@ -19,3 +19,21 @@ class TestField:
 
         non_unique = Field(null=True, unique=False, column_name='test')
         assert non_unique.to_sql_declaration() == 'test INT'
+
+
+class TestCharField:
+
+    def test_get_field_type(self):
+        char_field = CharField(max_length=100)
+        assert char_field.get_field_type() == 'VARCHAR(100)'
+
+    @pytest.mark.parametrize(
+        'value, expected', [
+            pytest.param("Foo bar", 'Foo bar', id='string-value'),
+            pytest.param(b'test', 'test', id='bytes-value'),
+            pytest.param(42, '42', id='integer-value'),
+        ]
+    )
+    def test_adapt(self, value, expected):
+        char_field = CharField(max_length=255)
+        assert char_field.adapt(value) == expected

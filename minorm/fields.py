@@ -37,3 +37,29 @@ class Field:
     def __set_name__(self, owner, name):
         if not self.column_name:
             self.column_name = name
+
+
+class IntegerField(Field):
+    FIELD_TYPE = 'INT'
+    adapt = int
+
+
+class _StringField(Field):
+
+    def adapt(self, value):
+        if isinstance(value, str):
+            return value
+        if isinstance(value, bytes):
+            return value.decode('utf-8')
+        return str(value)
+
+
+class CharField(_StringField):
+
+    def __init__(self, null=False, unique=False, default=None, column_name=None, **extra_kwargs):
+        max_length = extra_kwargs.pop('max_length')
+        super().__init__(null=null, unique=unique, default=default, column_name=column_name, **extra_kwargs)
+        self.max_length = min(int(max_length), 255)
+
+    def get_field_type(self):
+        return f'VARCHAR({self.max_length})'

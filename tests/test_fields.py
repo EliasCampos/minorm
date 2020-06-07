@@ -18,7 +18,7 @@ class TestField:
         assert unique_field.to_sql_declaration() == 'test INT NOT NULL UNIQUE DEFAULT 42'
 
         non_unique = Field(null=True, unique=False, column_name='test')
-        assert non_unique.to_sql_declaration() == 'test INT'
+        assert non_unique.to_sql_declaration() == 'test INT DEFAULT NULL'
 
 
 class TestCharField:

@@ -3,11 +3,13 @@
 class Field:
     FIELD_TYPE = None
 
+    NULL = 'NULL'
+
     def __init__(self, null=False, unique=False, default=None, column_name=None, **extra_kwargs):
         self.null = null
         self.unique = unique
 
-        self.default = self.adapt(default)
+        self.default = default
         self.column_name = column_name
 
         self.extra_kwargs = extra_kwargs
@@ -16,6 +18,9 @@ class Field:
         return value
 
     def to_sql_value(self, value):
+        if value is None:
+            return self.NULL
+
         return str(value)
 
     def to_sql_declaration(self):
@@ -25,7 +30,7 @@ class Field:
             declaration_parts.append('NOT NULL')
         if self.unique:
             declaration_parts.append('UNIQUE')
-        if self.default:
+        if self.default is not None or self.null:
             default_value = self.to_sql_value(self.default)
             declaration_parts.append(f'DEFAULT {default_value}')
 

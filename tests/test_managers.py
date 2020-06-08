@@ -225,3 +225,13 @@ class TestQueryExpression:
         assert result[2]["id"] == 3
         assert result[2]["name"] == 'z'
         assert "age" not in result[2]
+
+    def test_exists(self, test_model):
+        db = test_model.db
+        db.execute('INSERT INTO person (name, age) VALUES (?, ?);', params=('x', 3))
+
+        assert test_model.query.filter(name='x').exists()
+        assert test_model.query.filter(age=3).exists()
+
+        assert not test_model.query.filter(name='foobar').exists()
+        assert not test_model.query.filter(age=13).exists()

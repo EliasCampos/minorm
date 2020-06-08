@@ -39,6 +39,10 @@ class QueryExpression:
         return self
 
     def select_related(self, *args):
+        if len(args) == 1 and args[0] is None:
+            self._related = {}
+            return self
+
         for field_name in args:
             field = self.model.check_field(field_name, with_pk=True)
             if isinstance(field, ForeignKey):
@@ -83,14 +87,14 @@ class QueryExpression:
 
     def all(self):
         extracted = self._extract()
-
         if self._values_mapping:
             return [self._dict_from_row(row) for row in extracted]
-
-        return [self.model.instance_from_row(row, related=self._related) for row in self._extract()]
+        return [self.model.instance_from_row(row, related=self._related) for row in extracted]
 
     def values(self, *args):
-        values_mapping = {}
+        if len(args) == 1 and args[0] is None:
+            self._values_mapping = {}
+            return self
 
         for value in args:
             val_parts = value.split('__')
@@ -100,17 +104,24 @@ class QueryExpression:
                 for fk in self._related.values():
                     if rel == fk.name:
                         rel_field = fk.to.check_field(rel_field_name, with_pk=True)
-                        values_mapping[rel] = rel_field
+                        self._values_mapping[rel] = rel_field
                         break
                 else:
-                    raise ValueError(f'{rel} is not between supported relations.')
+                    raise ValueError(f'{rel} does not belong supported relations.')
             else:
                 val = val_parts[0]
                 field = self.model.check_field(val, with_pk=True)
-                values_mapping[val] = field
+                self._values_mapping[val] = field
 
-        self._values_mapping = values_mapping
         return self
+
+    def exists(self):
+        self.select_related(None)
+        self.values(self.model.PK_FIELD)
+        self._limit = 1
+
+        is_exists = bool(self._extract())
+        return is_exists
 
     def bulk_create(self, instances):
         model = self.model

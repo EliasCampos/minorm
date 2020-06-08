@@ -2,7 +2,7 @@ import pytest
 
 from minorm.db import SQLiteDatabase
 from minorm.fields import CharField, IntegerField, ForeignKey
-from minorm.managers import QueryExpression
+from minorm.managers import QuerySet
 from minorm.models import Model
 
 
@@ -33,7 +33,7 @@ class TestModel:
         assert Person._meta.db == fake_db
         assert Person._meta.table_name == 'test_model_table'
 
-    def test_query(self, mocker, fake_db):
+    def test_objects(self, mocker, fake_db):
         db_mock = mocker.patch('minorm.models.get_default_db')
         db_mock.return_value = fake_db
 
@@ -41,9 +41,9 @@ class TestModel:
             name = CharField(max_length=255)
             age = IntegerField()
 
-        query = Person.query
-        assert isinstance(query, QueryExpression)
-        assert query.model == Person
+        qs = Person.objects
+        assert isinstance(qs, QuerySet)
+        assert qs.model == Person
 
     def test_to_sql(self, mocker, fake_db):
         db_mock = mocker.patch('minorm.models.get_default_db')

@@ -3,7 +3,7 @@ from collections import namedtuple, OrderedDict
 from minorm.db import get_default_db
 from minorm.exceptions import DoesNotExists
 from minorm.fields import Field, PrimaryKey, ForeignKey
-from minorm.managers import QueryExpression
+from minorm.managers import QuerySet
 from minorm.queries import CreateTableQuery, DropTableQuery, InsertQuery, UpdateQuery
 from minorm.utils import pk_declaration_for_db
 
@@ -50,8 +50,8 @@ class ModelMetaclass(type):
         return model
 
     @property
-    def query(cls):
-        return QueryExpression(model=cls)
+    def objects(cls):
+        return QuerySet(model=cls)
 
     @property
     def fields(cls):

@@ -1,13 +1,13 @@
 import pytest
 
 from minorm.exceptions import MultipleQueryResult
-from minorm.managers import QueryExpression, OrderByExpression
+from minorm.managers import QuerySet, OrderByExpression
 
 
 class TestQueryExpression:
 
     def test_filter(self, test_model):
-        query = QueryExpression(model=test_model)
+        query = QuerySet(model=test_model)
 
         result = query.filter(name='x', age__gt=2)
 
@@ -16,7 +16,7 @@ class TestQueryExpression:
         assert result._where.values() == ('x', 2)
 
     def test_aswell(self, test_model):
-        query = QueryExpression(model=test_model)
+        query = QuerySet(model=test_model)
 
         result = query.filter(age__in=(3, 4)).aswell(age__lte=5)
 
@@ -25,7 +25,7 @@ class TestQueryExpression:
         assert result._where.values() == (3, 4, 5)
 
     def test_order_by(self, test_model):
-        query = QueryExpression(model=test_model)
+        query = QuerySet(model=test_model)
 
         result = query.order_by('-age', 'name')
 
@@ -36,7 +36,7 @@ class TestQueryExpression:
         db = test_model.db
 
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('John', 19))
-        test_model.query.update(age=42)
+        test_model.objects.update(age=42)
 
         results = db.execute('SELECT name, age FROM person;', fetch=True)
         assert results[0][1] == 42
@@ -46,7 +46,7 @@ class TestQueryExpression:
 
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 5), ('z', 1)])
 
-        test_model.query.filter(age__lt=5).update(name="test")
+        test_model.objects.filter(age__lt=5).update(name="test")
 
         assert db.last_query_rowcount == 2
 
@@ -54,7 +54,7 @@ class TestQueryExpression:
         assert len(results) == 2
 
     def test_create(self, test_model):
-        test_model.query.create(name='Vasya', age=19)
+        test_model.objects.create(name='Vasya', age=19)
         results = test_model.db.execute('SELECT * FROM person WHERE id = ?;', (1,), fetch=True)
         assert results
 
@@ -69,7 +69,7 @@ class TestQueryExpression:
         author = external_model(name='x', age=3)
         setattr(author, 'id', 1)
 
-        model_with_fk.query.filter(author=author).update(title='test')
+        model_with_fk.objects.filter(author=author).update(title='test')
 
         results = db.execute('SELECT * FROM book WHERE title = ?;', ('test', ), fetch=True)
         assert results
@@ -79,7 +79,7 @@ class TestQueryExpression:
 
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', params=('x', 3))
 
-        instance = test_model.query.get(id=1)
+        instance = test_model.objects.get(id=1)
         assert instance.pk == 1
         assert instance.name == 'x'
         assert instance.age == 3
@@ -89,35 +89,35 @@ class TestQueryExpression:
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', params=('x', 3))
 
         with pytest.raises(test_model.DoesNotExists):
-            test_model.query.get(id=9000)
+            test_model.objects.get(id=9000)
 
     def test_get_multiple_result(self, test_model):
         db = test_model.db
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 10), ('y', 10)])
 
         with pytest.raises(MultipleQueryResult):
-            test_model.query.get(age=10)
+            test_model.objects.get(age=10)
 
     def test_first(self, test_model):
         db = test_model.db
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 6), ('z', 6)])
 
-        instance = test_model.query.first()
+        instance = test_model.objects.first()
         assert instance.pk == 1
         assert instance.name == 'x'
 
-        instance = test_model.query.filter(age=6).first()
+        instance = test_model.objects.filter(age=6).first()
         assert instance.pk == 2
         assert instance.name == 'y'
 
-        instance = test_model.query.filter(age=9000).first()
+        instance = test_model.objects.filter(age=9000).first()
         assert not instance
 
     def test_all(self, test_model):
         db = test_model.db
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 6), ('z', 6)])
 
-        results = test_model.query.all()
+        results = test_model.objects.all()
         assert results[0].id == 1
         assert results[0].name == 'x'
         assert results[0].age == 3
@@ -134,7 +134,7 @@ class TestQueryExpression:
         instance1 = test_model(name='John', age=33)
         instance2 = test_model(name='Dick', age=42)
 
-        result = test_model.query.bulk_create([instance1, instance2, 'foobar'])
+        result = test_model.objects.bulk_create([instance1, instance2, 'foobar'])
         assert result == 2
 
         db = test_model.db
@@ -153,10 +153,10 @@ class TestQueryExpression:
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', params=('x', 3))
         db.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', params=('y', 1))
 
-        query = model_with_fk.query
-        related_query = query.select_related('author')
+        qs = model_with_fk.objects
+        related_query = qs.select_related('author')
 
-        assert related_query is query
+        assert related_query is qs
 
         result = related_query.get(id=1)
 
@@ -174,7 +174,7 @@ class TestQueryExpression:
         db.execute('INSERT INTO book (title, person_id) VALUES (?, ?);',
                    many=True, params=[('a', 1), ('b', 2), ('c', 1)])
 
-        results = model_with_fk.query.select_related('author').all()
+        results = model_with_fk.objects.select_related('author').all()
 
         assert results[0].author.id == 1
         assert results[0].author.name == 'foo'
@@ -192,7 +192,7 @@ class TestQueryExpression:
         db = test_model.db
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 6), ('z', 6)])
 
-        results = test_model.query[:2].all()
+        results = test_model.objects[:2].all()
 
         assert len(results) == 2
 
@@ -203,7 +203,7 @@ class TestQueryExpression:
         db = test_model.db
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 6), ('z', 6)])
 
-        result = test_model.query.filter(id__in=[2, 3])[1]
+        result = test_model.objects.filter(id__in=[2, 3])[1]
 
         assert result.id == 3
         assert result.name == 'z'
@@ -212,7 +212,7 @@ class TestQueryExpression:
         db = test_model.db
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 6), ('z', 6)])
 
-        result = test_model.query.values('id', 'name').all()
+        result = test_model.objects.values('id', 'name').all()
 
         assert result[0]["id"] == 1
         assert result[0]["name"] == 'x'
@@ -230,8 +230,8 @@ class TestQueryExpression:
         db = test_model.db
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', params=('x', 3))
 
-        assert test_model.query.filter(name='x').exists()
-        assert test_model.query.filter(age=3).exists()
+        assert test_model.objects.filter(name='x').exists()
+        assert test_model.objects.filter(age=3).exists()
 
-        assert not test_model.query.filter(name='foobar').exists()
-        assert not test_model.query.filter(age=13).exists()
+        assert not test_model.objects.filter(name='foobar').exists()
+        assert not test_model.objects.filter(age=13).exists()

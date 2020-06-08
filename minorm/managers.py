@@ -9,7 +9,7 @@ from minorm.fields import ForeignKey
 from minorm.queries import InsertQuery, SelectQuery, UpdateQuery
 
 
-class QueryExpression:
+class QuerySet:
 
     def __init__(self, model):
         self.model = model
@@ -135,6 +135,7 @@ class QueryExpression:
 
         return model.db.last_query_rowcount
 
+    @property
     def query(self):
         self_pk = self.model.pk_query_name
         joins = [JoinExpression.on_pk(fld.to.table_name, self_pk, fld.query_name) for fld in self._related.values()]
@@ -145,6 +146,7 @@ class QueryExpression:
                  .order_by(self._order_by))
         return query
 
+    @property
     def query_params(self):
         return self._where.values() if self._where else ()
 
@@ -183,8 +185,8 @@ class QueryExpression:
         where_cond = self._where_action(**kwargs)
         self._reset_where(where_cond, operator.and_)
 
-        select_query = self.query()
-        params = self.query_params()
+        select_query = self.query
+        params = self.query_params
         results = select_query.execute(params=params)
         return results
 

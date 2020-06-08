@@ -95,6 +95,22 @@ class QueryExpression:
 
         return model.db.last_query_rowcount
 
+    def query(self):
+        self_pk = self.model.pk_query_name
+        joins = [JoinExpression.on_pk(fld.to.table_name, self_pk, fld.query_name) for fld in self._related.values()]
+
+        all_models = (self.model, ) + tuple(self._related)
+        fields = tuple(chain.from_iterable(mdl.select_field_names for mdl in all_models))
+        query = (SelectQuery(db=self.model.db, table_name=self.model.table_name, fields=fields)
+                 .join(joins)
+                 .where(self._where)
+                 .limit(self._limit)
+                 .order_by(self._order_by))
+        return query
+
+    def query_params(self):
+        return self._where.values() if self._where else ()
+
     def __getitem__(self, item):
         if not any(isinstance(item, supported_type) for supported_type in (int, slice)):
             raise TypeError(f'{self.__class__.__name__} indices must be integers or slices.')
@@ -131,18 +147,8 @@ class QueryExpression:
         where_cond = self._where_action(**kwargs)
         self._reset_where(where_cond, operator.and_)
 
-        self_pk = self.model.pk_query_name
-        joins = [JoinExpression.on_pk(fld.to.table_name, self_pk, fld.query_name) for fld in self._related.values()]
-
-        all_models = (self.model, ) + tuple(self._related)
-        fields = tuple(chain.from_iterable(mdl.select_field_names for mdl in all_models))
-        select_query = (SelectQuery(db=self.model.db, table_name=self.model.table_name, fields=fields)
-                        .join(joins)
-                        .where(self._where)
-                        .limit(self._limit)
-                        .order_by(self._order_by))
-
-        params = self._where.values() if self._where else ()
+        select_query = self.query()
+        params = self.query_params()
         results = select_query.execute(params=params)
         return results
 

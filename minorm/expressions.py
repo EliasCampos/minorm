@@ -2,7 +2,7 @@ from collections import namedtuple
 
 
 class WhereCondition:
-    LOOKUPS = (
+    LOOKUP_MAPPING = (
         ('lt', '<'),
         ('lte', '<='),
         ('gt', '>'),
@@ -10,6 +10,8 @@ class WhereCondition:
         ('in', 'IN'),
         ('neq', '!='),
     )
+
+    MULTIPLE_VALUE_OPS = ('IN', )
 
     AND = 'AND'
     OR = 'OR'
@@ -31,7 +33,7 @@ class WhereCondition:
         self._negated = False
 
     def __str__(self):
-        result = f'{self.field} {self.op} {self.value if self.no_escape else "{escape}"}'
+        result = f'{self.field} {self.op} {self.value if self.no_escape else self.resolved_escape}'
 
         if self._and:
             result = f'{result} {self.AND} {self._and}'
@@ -45,7 +47,8 @@ class WhereCondition:
         return result
 
     def values(self):
-        result = (self.value, )
+        value = self.value
+        result = tuple(value) if self.op in self.MULTIPLE_VALUE_OPS else (value, )
 
         if self._and:
             result += self._and.values()
@@ -54,6 +57,12 @@ class WhereCondition:
             result += self._or.values()
 
         return result
+
+    @property
+    def resolved_escape(self):
+        if self.op in self.MULTIPLE_VALUE_OPS:
+            return f"({', '.join('{0}' for _ in range(len(self.value)))})"
+        return '{0}'
 
     def __and__(self, other):
         self._and = other
@@ -72,7 +81,7 @@ class WhereCondition:
         parts = field_name.split('__')
         field = parts[0]
         if len(parts) == 2:
-            lookups = dict(cls.LOOKUPS)
+            lookups = dict(cls.LOOKUP_MAPPING)
             if parts[1] not in lookups:
                 raise ValueError(f'Invalid lookup expression: {parts[1]}')
             lookup = lookups[parts[1]]

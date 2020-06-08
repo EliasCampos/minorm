@@ -79,7 +79,7 @@ class UpdateQuery(DMLQuery):
 
         if self._where:
             where_part = f'WHERE {self._where}'
-            where_part_proper_escape = where_part.format(escape=self.escape)
+            where_part_proper_escape = where_part.format(self.escape)
             query_parts.append(where_part_proper_escape)
 
         return f"{' '.join(query_parts)};"
@@ -104,7 +104,7 @@ class SelectQuery(DMLQuery):
 
         if self._where:
             where_part = f'WHERE {self._where}'
-            where_part_proper_escape = where_part.format(escape=self.escape)
+            where_part_proper_escape = where_part.format(self.escape)
             query_parts.append(where_part_proper_escape)
 
         if self._order_by:

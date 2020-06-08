@@ -12,9 +12,9 @@ def get_default_db():
     if _default_db:
         return _default_db
 
-    driver_name = os.getenv(DATABASE_URL_PARAM)
+    driver_name = os.getenv(DATABASE_DRIVER_PARAM)
     driver_mapping = {
-        'sqlite': SQLiteDatabase,
+        'sqlite3': SQLiteDatabase,
     }
 
     db_class = driver_mapping[driver_name]

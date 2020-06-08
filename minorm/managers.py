@@ -66,6 +66,7 @@ class QueryExpression:
         return instance
 
     def get(self, **kwargs):
+        self._limit = 2
         results = self._extract(**kwargs)
         if not results:
             raise self.model.DoesNotExists
@@ -75,6 +76,7 @@ class QueryExpression:
         return self._instance_from_result(results)
 
     def first(self):
+        self._limit = 1
         results = self._extract()
         if not results:
             return None

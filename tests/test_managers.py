@@ -12,7 +12,7 @@ class TestQueryExpression:
         result = query.filter(name='x', age__gt=2)
 
         assert result is query
-        assert str(result._where) == "person.name = {escape} AND person.age > {escape}"
+        assert str(result._where) == "person.name = {0} AND person.age > {0}"
         assert result._where.values() == ('x', 2)
 
     def test_aswell(self, test_model):
@@ -21,8 +21,8 @@ class TestQueryExpression:
         result = query.filter(age__in=(3, 4)).aswell(age__lte=5)
 
         assert result is query
-        assert str(result._where) == "person.age IN {escape} OR person.age <= {escape}"
-        assert result._where.values() == ((3, 4), 5)
+        assert str(result._where) == "person.age IN ({0}, {0}) OR person.age <= {0}"
+        assert result._where.values() == (3, 4, 5)
 
     def test_order_by(self, test_model):
         query = QueryExpression(model=test_model)
@@ -203,7 +203,7 @@ class TestQueryExpression:
         db = test_model.db
         db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 6), ('z', 6)])
 
-        result = test_model.query.filter(id__gt=1)[1]
+        result = test_model.query.filter(id__in=[2, 3])[1]
 
         assert result.id == 3
         assert result.name == 'z'

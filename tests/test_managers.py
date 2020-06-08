@@ -12,7 +12,7 @@ class TestQueryExpression:
         result = query.filter(name='x', age__gt=2)
 
         assert result is query
-        assert str(result._where) == "name = {escape} AND age > {escape}"
+        assert str(result._where) == "person.name = {escape} AND person.age > {escape}"
         assert result._where.values() == ('x', 2)
 
     def test_aswell(self, test_model):
@@ -21,7 +21,7 @@ class TestQueryExpression:
         result = query.filter(age__in=(3, 4)).aswell(age__lte=5)
 
         assert result is query
-        assert str(result._where) == "age IN {escape} OR age <= {escape}"
+        assert str(result._where) == "person.age IN {escape} OR person.age <= {escape}"
         assert result._where.values() == ((3, 4), 5)
 
     def test_order_by(self, test_model):
@@ -144,3 +144,46 @@ class TestQueryExpression:
 
         result2 = db.execute('SELECT * FROM person WHERE name = ? AND age = ?;', params=('Dick', 42), fetch=True)
         assert result2
+
+    def test_select_related(self, related_models):
+        model_with_fk, external_model = related_models
+
+        db = external_model.db
+
+        db.execute('INSERT INTO person (name, age) VALUES (?, ?);', params=('x', 3))
+        db.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', params=('y', 1))
+
+        query = model_with_fk.query
+        related_query = query.select_related('author')
+
+        assert related_query is query
+
+        result = related_query.get(id=1)
+
+        assert result.pk == 1
+        assert result.author.pk == 1
+        assert result.author.name == 'x'
+        assert result.author.age == 3
+
+    def test_select_related_namedtuple(self, related_models):
+        model_with_fk, external_model = related_models
+
+        db = external_model.db
+
+        db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('foo', 18), ('bar', 19)])
+        db.execute('INSERT INTO book (title, person_id) VALUES (?, ?);',
+                   many=True, params=[('a', 1), ('b', 2), ('c', 1)])
+
+        results = model_with_fk.query.select_related('author').all()
+
+        assert results[0].author.id == 1
+        assert results[0].author.name == 'foo'
+        assert results[0].author.age == 18
+
+        assert results[1].author.id == 2
+        assert results[1].author.name == 'bar'
+        assert results[1].author.age == 19
+
+        assert results[2].author.id == 1
+        assert results[2].author.name == 'foo'
+        assert results[2].author.age == 18

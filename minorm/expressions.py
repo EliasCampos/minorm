@@ -18,10 +18,12 @@ class WhereCondition:
 
     EQ = '='
 
-    def __init__(self, field, op, value):
+    def __init__(self, field, op, value, no_escape=False):
         self.field = field
         self.op = op
         self.value = value
+
+        self.no_escape = no_escape
 
         self._and = None
         self._or = None
@@ -29,7 +31,7 @@ class WhereCondition:
         self._negated = False
 
     def __str__(self):
-        result = f'{self.field} {self.op} {{escape}}'
+        result = f'{self.field} {self.op} {self.value if self.no_escape else "{escape}"}'
 
         if self._and:
             result = f'{result} {self.AND} {self._and}'
@@ -97,3 +99,21 @@ class OrderByExpression(namedtuple('OrderByExpression', 'value, ordering')):
 
     def __str__(self):
         return f'{self.value} {self.ordering}'
+
+
+class JoinExpression:
+    LEFT_OUTER = 'LEFT OUTER'
+    INNER = 'INNER'
+
+    def __init__(self, table_name, on, join_type=LEFT_OUTER):
+        self.table_name = table_name
+        self.on = on
+        self.join_type = join_type
+
+    def __str__(self):
+        return f'{self.join_type} JOIN {self.table_name} ON {self.on}'
+
+    @classmethod
+    def on_pk(cls, outer_table, pk_field, fk_field, join_type=None):
+        on = WhereCondition(pk_field, WhereCondition.EQ, fk_field, no_escape=True)
+        return cls(table_name=outer_table, on=on, join_type=(join_type or cls.LEFT_OUTER))

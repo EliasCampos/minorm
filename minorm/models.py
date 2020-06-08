@@ -2,7 +2,7 @@ from collections import namedtuple, OrderedDict
 
 from minorm.db import get_default_db
 from minorm.exceptions import DoesNotExists
-from minorm.fields import Field, PrimaryKey
+from minorm.fields import Field, PrimaryKey, ForeignKey
 from minorm.managers import QueryExpression
 from minorm.queries import CreateTableQuery, DropTableQuery, InsertQuery, UpdateQuery
 from minorm.utils import pk_declaration_for_db
@@ -40,7 +40,7 @@ class ModelMetaclass(type):
         does_not_exists = type(f'{model.__name__}DoesNotExists', (DoesNotExists, ), {})
         setattr(model, 'DoesNotExists', does_not_exists)
 
-        query_namedtuple = namedtuple(f'{model.__name__}QueryNamedTuple', field_names=model.column_names)
+        query_namedtuple = namedtuple(f'{model.__name__}QueryNamedTuple', field_names=model.all_field_names)
         setattr(model, 'query_namedtuple', query_namedtuple)
 
         return model
@@ -54,6 +54,14 @@ class ModelMetaclass(type):
         return OrderedDict((name, field) for name, field in cls._fields.items() if name != cls.PK_FIELD)
 
     @property
+    def all_field_names(cls):
+        return [name for name in cls._fields.keys()]
+
+    @property
+    def pk_query_name(cls):
+        return f"{cls.table_name}.{cls.PK_FIELD}"
+
+    @property
     def db(cls):
         return cls._meta.db
 
@@ -62,9 +70,40 @@ class ModelMetaclass(type):
         return cls._meta.table_name
 
     @property
+    def name(cls):
+        return cls.__name__.lower()
+
+    @property
     def column_names(cls):
         pk_field = cls.PK_FIELD
         return [pk_field] + [field.column_name for field in cls.fields.values()]
+
+    @property
+    def select_field_names(cls):
+        pk_field = f'{cls.pk_query_name} AS {cls.name}_{cls.PK_FIELD}'
+        return [pk_field] + [f'{field.query_name} AS {cls.name}_{name}' for name, field in cls.fields.items()]
+
+    def instance_from_row(cls, row, related=(), is_tuple=True):
+        pk_lookup = f'{cls.name}_{cls.PK_FIELD}'
+        pk_value = row[pk_lookup]
+
+        kwargs = {}
+        for attr_name, field in cls.fields.items():
+            if related and isinstance(field, ForeignKey) and field.to in related:
+                value = field.to.instance_from_row(row, related=None, is_tuple=is_tuple)
+            else:
+                field_lookup = f'{cls.name}_{attr_name}'
+                value = row[field_lookup]
+
+            kwargs[attr_name] = value
+
+        if is_tuple:
+            kwargs[cls.PK_FIELD] = pk_value
+            return cls.query_namedtuple(**kwargs)
+
+        result = cls(**kwargs)
+        setattr(result, cls.PK_FIELD, pk_value)
+        return result
 
     def to_sql(cls):
         field_params = [field.to_sql_declaration() for field in cls._fields.values()]

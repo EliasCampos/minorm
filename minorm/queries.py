@@ -30,18 +30,22 @@ class DropTableQuery(DDLQuery):
 class DMLQuery:
     FETCH = False
 
-    def __init__(self, db, table_name, fields=(), where=None, order_by=None):
+    def __init__(self, db, table_name, fields=(), where=None):
         self.db = db
         self.table_name = table_name
         self.fields = fields
-        self.where = where
-        self.order_by = order_by
 
         self.escape = getattr(db, 'escape', '%s')
+
+        self._where = where
 
     def execute(self, params=()):
         raw_sql = str(self)
         return self.db.execute(raw_sql, params, fetch=self.FETCH)
+
+    def where(self, expr):
+        self._where = expr
+        return self
 
 
 class InsertQuery(DMLQuery):
@@ -68,8 +72,8 @@ class UpdateQuery(DMLQuery):
         update_str = f'UPDATE {self.table_name} SET {fields_part}'
         query_parts = [update_str]
 
-        if self.where:
-            where_part = f'WHERE {self.where}'
+        if self._where:
+            where_part = f'WHERE {self._where}'
             where_part_proper_escape = where_part.format(escape=self.escape)
             query_parts.append(where_part_proper_escape)
 
@@ -79,20 +83,36 @@ class UpdateQuery(DMLQuery):
 class SelectQuery(DMLQuery):
     FETCH = True
 
+    def __init__(self, db, table_name, fields=(), where=None):
+        super().__init__(db, table_name, fields, where)
+
+        self._joins = []
+        self._order_by = None
+
     def __str__(self):
         fields_part = ', '.join(self.fields)
 
         select_str = f'SELECT {fields_part} FROM {self.table_name}'
         query_parts = [select_str]
 
-        if self.where:
-            where_part = f'WHERE {self.where}'
+        query_parts.extend(str(join) for join in self._joins)
+
+        if self._where:
+            where_part = f'WHERE {self._where}'
             where_part_proper_escape = where_part.format(escape=self.escape)
             query_parts.append(where_part_proper_escape)
 
-        if self.order_by:
-            order_part = ', '.join(str(ordering) for ordering in self.order_by)
+        if self._order_by:
+            order_part = ', '.join(str(ordering) for ordering in self._order_by)
             order_str = f'ORDER BY {order_part}'
             query_parts.append(order_str)
 
         return f"{' '.join(query_parts)};"
+
+    def join(self, exprs):
+        self._joins.extend(exprs)
+        return self
+
+    def order_by(self, exprs):
+        self._order_by = exprs
+        return self

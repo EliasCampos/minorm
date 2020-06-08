@@ -18,6 +18,9 @@ class Field:
 
         self.extra_kwargs = extra_kwargs
 
+        self.name = None
+        self.model = None
+
     def adapt(self, value):
         return value
 
@@ -44,8 +47,14 @@ class Field:
         return self.FIELD_TYPE
 
     def __set_name__(self, owner, name):
+        self.model = owner
+        self.name = name
         if not self.column_name:
             self.column_name = name
+
+    @property
+    def query_name(self):
+        return f'{self.model.table_name}.{self.column_name}'
 
 
 class IntegerField(Field):

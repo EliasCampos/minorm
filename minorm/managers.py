@@ -1,9 +1,11 @@
 from collections import OrderedDict
+from itertools import chain
 import functools
 import operator
 
 from minorm.exceptions import MultipleQueryResult
-from minorm.expressions import OrderByExpression, WhereCondition
+from minorm.expressions import JoinExpression, OrderByExpression, WhereCondition
+from minorm.fields import ForeignKey
 from minorm.queries import InsertQuery, SelectQuery, UpdateQuery
 
 
@@ -14,6 +16,8 @@ class QueryExpression:
 
         self._where = None
         self._order_by = set()
+
+        self._related = {}
 
     def filter(self, **kwargs):
         where_cond = self._where_action(**kwargs)
@@ -30,6 +34,15 @@ class QueryExpression:
             order_exp = OrderByExpression.from_field_name(field_name)
             self.model.check_field(order_exp.value)
             self._order_by.add(order_exp)
+        return self
+
+    def select_related(self, *args):
+        for field_name in args:
+            self.model.check_field(field_name)
+            field = self.model.fields[field_name]
+            if isinstance(field, ForeignKey):
+                self._related[field.to] = field
+
         return self
 
     def update(self, **kwargs):
@@ -67,7 +80,7 @@ class QueryExpression:
         return self._instance_from_result(results)
 
     def all(self):
-        return [self.model.query_namedtuple._make(row) for row in self._extract()]
+        return [self.model.instance_from_row(row, related=self._related) for row in self._extract()]
 
     def bulk_create(self, instances):
         model = self.model
@@ -90,7 +103,7 @@ class QueryExpression:
             field = self.model.fields[field_name]
             adopted_value = field.to_query_parameter(value)
 
-            where_cond = WhereCondition(field.column_name, op, adopted_value)
+            where_cond = WhereCondition(field.query_name, op, adopted_value)
             where_conds.append(where_cond)
 
         result = functools.reduce(operator.and_, where_conds) if where_conds else None
@@ -103,11 +116,10 @@ class QueryExpression:
             self._where = op(self._where, where_cond)
 
     def _extract(self, **kwargs):
-        pk_field = self.model.PK_FIELD
-        pk = kwargs.pop(pk_field, None)
+        pk = kwargs.pop(self.model.PK_FIELD, None)
         where_cond = self._where_action(**kwargs)
         if pk is not None:
-            pk_cond = WhereCondition(pk_field, WhereCondition.EQ, pk)
+            pk_cond = WhereCondition(self.model.pk_query_name, WhereCondition.EQ, pk)
             if where_cond:
                 where_cond &= pk_cond
             else:
@@ -115,21 +127,21 @@ class QueryExpression:
 
         self._reset_where(where_cond, operator.and_)
 
-        fields = self.model.column_names
-        select_query = SelectQuery(db=self.model.db, table_name=self.model.table_name, fields=fields,
-                                   where=self._where, order_by=self._order_by)
+        self_pk = self.model.pk_query_name
+        joins = [JoinExpression.on_pk(fld.to.table_name, self_pk, fld.query_name) for fld in self._related.values()]
+
+        all_models = (self.model, ) + tuple(self._related)
+        fields = tuple(chain.from_iterable(mdl.select_field_names for mdl in all_models))
+        select_query = (SelectQuery(db=self.model.db, table_name=self.model.table_name, fields=fields)
+                        .join(joins)
+                        .where(self._where)
+                        .order_by(self._order_by))
 
         params = self._where.values() if self._where else ()
         results = select_query.execute(params=params)
         return results
 
     def _instance_from_result(self, results):
-        result = results[0]
-        pk_field = self.model.PK_FIELD
-        fields = [pk_field] + list(self.model.fields.keys())
-
-        extracted = {name: val for name, val in zip(fields, result)}
-        pk_val = extracted.pop(pk_field)
-        instance = self.model(**extracted)
-        setattr(instance, pk_field, pk_val)
+        row = results[0]
+        instance = self.model.instance_from_row(row, related=self._related, is_tuple=False)
         return instance

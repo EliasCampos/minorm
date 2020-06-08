@@ -8,7 +8,7 @@ class TestWhereCondition:
     def test_str(self):
         where_cond = WhereCondition(field='x', op='=', value='3')
 
-        assert str(where_cond) == "x = {escape}"
+        assert str(where_cond) == "x = {0}"
 
     def test_and(self):
         where_cond1 = WhereCondition(field='x', op='=', value='3')
@@ -18,7 +18,7 @@ class TestWhereCondition:
         assert result is where_cond1
         assert result._and is where_cond2
 
-        assert str(result) == "x = {escape} AND y = {escape}"
+        assert str(result) == "x = {0} AND y = {0}"
         assert result.values() == ('3', '5')
 
     def test_or(self):
@@ -29,7 +29,7 @@ class TestWhereCondition:
         assert result is where_cond1
         assert result._or is where_cond2
 
-        assert str(result) == "x = {escape} OR y = {escape}"
+        assert str(result) == "x = {0} OR y = {0}"
         assert result.values() == ('3', '5')
 
     def test_or_and(self):
@@ -37,7 +37,7 @@ class TestWhereCondition:
         where_cond2 = WhereCondition(field='y', op='=', value='5')
         where_cond3 = WhereCondition(field='z', op='=', value='42')
 
-        assert str(where_cond3 | where_cond1 & where_cond2) == "z = {escape} OR x = {escape} AND y = {escape}"
+        assert str(where_cond3 | where_cond1 & where_cond2) == "z = {0} OR x = {0} AND y = {0}"
         assert (where_cond3 | where_cond1 & where_cond2).values() == ('42', '3', '5')
 
     def test__not(self):
@@ -47,7 +47,7 @@ class TestWhereCondition:
         where_cond2 = ~where_cond
         assert where_cond2._negated
 
-        assert str(where_cond2) == "NOT (x = {escape})"
+        assert str(where_cond2) == "NOT (x = {0})"
         assert where_cond2.values() == ('3', )
 
     def test_not_and(self):
@@ -55,7 +55,7 @@ class TestWhereCondition:
         where_cond2 = WhereCondition(field='y', op='=', value='5')
 
         not_and = ~(where_cond1 & where_cond2)
-        assert str(not_and) == "NOT (x = {escape} AND y = {escape})"
+        assert str(not_and) == "NOT (x = {0} AND y = {0})"
         assert not_and.values() == ('3', '5')
 
     @pytest.mark.parametrize(

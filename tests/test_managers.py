@@ -30,7 +30,7 @@ class TestQueryExpression:
         result = query.order_by('-age', 'name')
 
         assert result is query
-        assert result._order_by == {OrderByExpression('age', 'DESC'), OrderByExpression('name', 'ASC')}
+        assert result._order_by == {OrderByExpression('person.age', 'DESC'), OrderByExpression('person.name', 'ASC')}
 
     def test_update(self, test_model):
         db = test_model.db
@@ -207,3 +207,21 @@ class TestQueryExpression:
 
         assert result.id == 3
         assert result.name == 'z'
+
+    def test_values(self, test_model):
+        db = test_model.db
+        db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 6), ('z', 6)])
+
+        result = test_model.query.values('id', 'name').all()
+
+        assert result[0]["id"] == 1
+        assert result[0]["name"] == 'x'
+        assert "age" not in result[0]
+
+        assert result[1]["id"] == 2
+        assert result[1]["name"] == 'y'
+        assert "age" not in result[1]
+
+        assert result[2]["id"] == 3
+        assert result[2]["name"] == 'z'
+        assert "age" not in result[2]

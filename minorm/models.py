@@ -29,11 +29,15 @@ class ModelMetaclass(type):
         table_name = getattr(meta, 'table_name', name.lower())
         db = getattr(meta, 'db', None) or get_default_db()
 
-        fields[mcs.PK_FIELD] = PrimaryKey(column_name=mcs.PK_FIELD, pk_declaration=pk_declaration_for_db(db))
+        pk_field = PrimaryKey(column_name=mcs.PK_FIELD, pk_declaration=pk_declaration_for_db(db))
+        fields[mcs.PK_FIELD] = pk_field
 
         # Create and set params:
         model = super().__new__(mcs, name, bases, namespace)
         setattr(model, '_fields', fields)
+
+        pk_field.model = model
+        pk_field.name = model.PK_FIELD
 
         setattr(model, '_meta', model_metadata(db=db, table_name=table_name))
 
@@ -59,7 +63,8 @@ class ModelMetaclass(type):
 
     @property
     def pk_query_name(cls):
-        return f"{cls.table_name}.{cls.PK_FIELD}"
+        pk_field = cls._fields[cls.PK_FIELD]
+        return pk_field.query_name
 
     @property
     def db(cls):
@@ -80,8 +85,7 @@ class ModelMetaclass(type):
 
     @property
     def select_field_names(cls):
-        pk_field = f'{cls.pk_query_name} AS {cls.name}_{cls.PK_FIELD}'
-        return [pk_field] + [f'{field.query_name} AS {cls.name}_{name}' for name, field in cls.fields.items()]
+        return [field.select_field_name for field in cls._fields.values()]
 
     def instance_from_row(cls, row, related=(), is_tuple=True):
         pk_lookup = f'{cls.name}_{cls.PK_FIELD}'
@@ -119,9 +123,11 @@ class ModelMetaclass(type):
         drop_query = DropTableQuery(db=cls._meta.db, table_name=cls._meta.table_name)
         return drop_query.execute()
 
-    def check_field(cls, field_name):
-        if field_name not in cls.fields:
+    def check_field(cls, field_name, with_pk=False):
+        if field_name not in cls._fields or field_name == cls.PK_FIELD and not with_pk:
             raise ValueError(f'{field_name} is not a valid field for model {cls.__name__}.')
+
+        return cls._fields[field_name]
 
 
 class Model(metaclass=ModelMetaclass):

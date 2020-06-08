@@ -19,6 +19,7 @@ class QueryExpression:
         self._limit = None
 
         self._related = {}
+        self._values_mapping = {}
 
     def filter(self, **kwargs):
         where_cond = self._where_action(**kwargs)
@@ -33,14 +34,13 @@ class QueryExpression:
     def order_by(self, *args):
         for field_name in args:
             order_exp = OrderByExpression.from_field_name(field_name)
-            self.model.check_field(order_exp.value)
-            self._order_by.add(order_exp)
+            field = self.model.check_field(order_exp.value, with_pk=True)
+            self._order_by.add(OrderByExpression(value=field.query_name, ordering=order_exp.ordering))
         return self
 
     def select_related(self, *args):
         for field_name in args:
-            self.model.check_field(field_name)
-            field = self.model.fields[field_name]
+            field = self.model.check_field(field_name, with_pk=True)
             if isinstance(field, ForeignKey):
                 self._related[field.to] = field
 
@@ -50,8 +50,7 @@ class QueryExpression:
         update_data = OrderedDict()
 
         for key, value in kwargs.items():
-            self.model.check_field(key)
-            field = self.model.fields[key]
+            field = self.model.check_field(key, with_pk=False)
             adopted_value = field.adapt(value)
             update_data[field.column_name] = adopted_value
 
@@ -83,7 +82,35 @@ class QueryExpression:
         return self._instance_from_result(results)
 
     def all(self):
+        extracted = self._extract()
+
+        if self._values_mapping:
+            return [self._dict_from_row(row) for row in extracted]
+
         return [self.model.instance_from_row(row, related=self._related) for row in self._extract()]
+
+    def values(self, *args):
+        values_mapping = {}
+
+        for value in args:
+            val_parts = value.split('__')
+            if len(val_parts) > 1:
+                rel = val_parts[0]
+                rel_field_name = val_parts[1]
+                for fk in self._related.values():
+                    if rel == fk.name:
+                        rel_field = fk.to.check_field(rel_field_name, with_pk=True)
+                        values_mapping[rel] = rel_field
+                        break
+                else:
+                    raise ValueError(f'{rel} is not between supported relations.')
+            else:
+                val = val_parts[0]
+                field = self.model.check_field(val, with_pk=True)
+                values_mapping[val] = field
+
+        self._values_mapping = values_mapping
+        return self
 
     def bulk_create(self, instances):
         model = self.model
@@ -100,10 +127,7 @@ class QueryExpression:
     def query(self):
         self_pk = self.model.pk_query_name
         joins = [JoinExpression.on_pk(fld.to.table_name, self_pk, fld.query_name) for fld in self._related.values()]
-
-        all_models = (self.model, ) + tuple(self._related)
-        fields = tuple(chain.from_iterable(mdl.select_field_names for mdl in all_models))
-        query = (SelectQuery(db=self.model.db, table_name=self.model.table_name, fields=fields)
+        query = (SelectQuery(db=self.model.db, table_name=self.model.table_name, fields=self._get_fields())
                  .join(joins)
                  .where(self._where)
                  .limit(self._limit)
@@ -129,8 +153,7 @@ class QueryExpression:
 
         for key, value in kwargs.items():
             field_name, op = WhereCondition.resolve_lookup(key)
-            self.model.check_field(field_name)
-            field = self.model.fields[field_name]
+            field = self.model.check_field(field_name, with_pk=True)
             adopted_value = field.to_query_parameter(value)
 
             where_cond = WhereCondition(field.query_name, op, adopted_value)
@@ -154,18 +177,14 @@ class QueryExpression:
         results = select_query.execute(params=params)
         return results
 
+    def _dict_from_row(self, row):
+        return {val: row[f'{field.model.name}_{field.name}'] for val, field in self._values_mapping.items()}
+
     def _check_pk_lookups(self, kwargs):
-        pk = kwargs.pop(self.model.PK_FIELD, None)
-
         conds = []
-
-        if pk is not None:
-            pk_cond = WhereCondition(self.model.pk_query_name, WhereCondition.EQ, pk)
-            conds.append(pk_cond)
-
         lookups = set()
-        pk_prefix = f'{self.model.PK_FIELD}__'
 
+        pk_prefix = f'{self.model.PK_FIELD}__'
         for key, value in kwargs.items():
             if not key.startswith(pk_prefix):
                 continue
@@ -176,7 +195,7 @@ class QueryExpression:
             lookups.add(key)
 
         for lookup in lookups:
-            kwargs.pop(lookup)
+            del kwargs[lookup]
 
         return conds
 
@@ -184,3 +203,11 @@ class QueryExpression:
         row = results[0]
         instance = self.model.instance_from_row(row, related=self._related, is_tuple=False)
         return instance
+
+    def _get_fields(self):
+        if self._values_mapping:
+            field_seq = [field.select_field_name for field in self._values_mapping.values()]
+        else:
+            all_models = (self.model, ) + tuple(self._related)
+            field_seq = chain.from_iterable(mdl.select_field_names for mdl in all_models)
+        return tuple(field_seq)

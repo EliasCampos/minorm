@@ -6,7 +6,7 @@ import operator
 from minorm.exceptions import MultipleQueryResult
 from minorm.expressions import JoinExpression, OrderByExpression, WhereCondition
 from minorm.fields import ForeignKey
-from minorm.queries import InsertQuery, SelectQuery, UpdateQuery
+from minorm.queries import DeleteQuery, InsertQuery, SelectQuery, UpdateQuery
 
 
 class QuerySet:
@@ -62,6 +62,11 @@ class QuerySet:
                                    where=self._where)
         params = tuple(update_data.values()) + (self._where.values() if self._where else ())
         update_query.execute(params=params)
+
+    def delete(self):
+        delete_query = DeleteQuery(db=self.model.db, table_name=self.model.table_name, where=self._where)
+        delete_query.execute(params=self.query_params)
+        return self.model.db.last_query_rowcount
 
     def create(self, **kwargs):
         instance = self.model(**kwargs)

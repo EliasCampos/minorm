@@ -74,6 +74,16 @@ class TestQueryExpression:
         results = db.execute('SELECT * FROM book WHERE title = ?;', ('test', ), fetch=True)
         assert results
 
+    def test_delete(self, test_model):
+        db = test_model.db
+        db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 6), ('z', 6)])
+
+        result = test_model.objects.filter(age__gt=3).delete()
+
+        assert result == 2
+        rows = db.execute('SELECT * FROM person;', fetch=True)
+        assert len(rows) == 1
+
     def test_get(self, test_model):
         db = test_model.db
 

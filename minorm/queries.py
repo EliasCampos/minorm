@@ -85,6 +85,21 @@ class UpdateQuery(DMLQuery):
         return f"{' '.join(query_parts)};"
 
 
+class DeleteQuery(DMLQuery):
+    FETCH = False
+
+    def __str__(self):
+        update_str = f'DELETE FROM {self.table_name}'
+        query_parts = [update_str]
+
+        if self._where:
+            where_part = f'WHERE {self._where}'
+            where_part_proper_escape = where_part.format(self.escape)
+            query_parts.append(where_part_proper_escape)
+
+        return f"{' '.join(query_parts)};"
+
+
 class SelectQuery(DMLQuery):
     FETCH = True
 

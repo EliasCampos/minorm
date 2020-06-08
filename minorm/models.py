@@ -2,9 +2,10 @@ from collections import namedtuple, OrderedDict
 
 from minorm.db import get_default_db
 from minorm.exceptions import DoesNotExists
+from minorm.expressions import WhereCondition
 from minorm.fields import Field, PrimaryKey, ForeignKey
 from minorm.managers import QuerySet
-from minorm.queries import CreateTableQuery, DropTableQuery, InsertQuery, UpdateQuery
+from minorm.queries import CreateTableQuery, DropTableQuery, InsertQuery, UpdateQuery, SelectQuery
 from minorm.utils import pk_declaration_for_db
 
 
@@ -166,3 +167,17 @@ class Model(metaclass=ModelMetaclass):
         for name, field in self.__class__.fields.items():
             adapted_value = field.adapt(getattr(self, name))
             setattr(self, name, adapted_value)
+
+    def refresh_from_db(self):
+        if not self.pk:
+            return
+        model = self.__class__
+        pk_cond = WhereCondition(model.PK_FIELD, WhereCondition.EQ, self.pk)
+        fields = [field.column_name for field in model.fields.values()]
+        select_query = SelectQuery(db=model.db, table_name=model.table_name,
+                                   fields=fields, where=pk_cond)
+        result = select_query.execute(params=pk_cond.values())
+        row = result[0]
+        for attr_name, field in model.fields.items():
+            value = row[field.column_name]
+            setattr(self, attr_name, value)

@@ -148,3 +148,15 @@ class TestModel:
 
         assert book.pk == 1
         assert book.author == author.pk
+
+    def test_refresh_from_db(self, test_model):
+        instance = test_model(name="john", age=33)
+        instance.save()
+
+        test_model.objects.filter(id=instance.id).update(name='foobar', age=42)
+
+        instance.refresh_from_db()
+
+        assert instance.pk == 1
+        assert instance.name == 'foobar'
+        assert instance.age == 42

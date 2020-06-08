@@ -30,7 +30,7 @@ class DropTableQuery(DDLQuery):
 class DMLQuery:
     FETCH = False
 
-    def __init__(self, db, table_name, fields=(), where=None):
+    def __init__(self, db, table_name, fields=(), where=None, limit=None):
         self.db = db
         self.table_name = table_name
         self.fields = fields
@@ -38,6 +38,7 @@ class DMLQuery:
         self.escape = getattr(db, 'escape', '%s')
 
         self._where = where
+        self._limit = limit
 
     def execute(self, params=()):
         raw_sql = str(self)
@@ -45,6 +46,10 @@ class DMLQuery:
 
     def where(self, expr):
         self._where = expr
+        return self
+
+    def limit(self, value):
+        self._limit = value
         return self
 
 
@@ -106,6 +111,10 @@ class SelectQuery(DMLQuery):
             order_part = ', '.join(str(ordering) for ordering in self._order_by)
             order_str = f'ORDER BY {order_part}'
             query_parts.append(order_str)
+
+        if self._limit:
+            limit_str = f'LIMIT {self._limit}'
+            query_parts.append(limit_str)
 
         return f"{' '.join(query_parts)};"
 

@@ -187,3 +187,23 @@ class TestQueryExpression:
         assert results[2].author.id == 1
         assert results[2].author.name == 'foo'
         assert results[2].author.age == 18
+
+    def test_limit(self, test_model):
+        db = test_model.db
+        db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 6), ('z', 6)])
+
+        results = test_model.query[:2].all()
+
+        assert len(results) == 2
+
+        assert results[0].id == 1
+        assert results[1].id == 2
+
+    def test_index(self, test_model):
+        db = test_model.db
+        db.execute('INSERT INTO person (name, age) VALUES (?, ?);', many=True, params=[('x', 3), ('y', 6), ('z', 6)])
+
+        result = test_model.query.filter(id__gt=1)[1]
+
+        assert result.id == 3
+        assert result.name == 'z'

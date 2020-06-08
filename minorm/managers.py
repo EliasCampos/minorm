@@ -16,6 +16,7 @@ class QueryExpression:
 
         self._where = None
         self._order_by = set()
+        self._limit = None
 
         self._related = {}
 
@@ -94,8 +95,19 @@ class QueryExpression:
 
         return model.db.last_query_rowcount
 
+    def __getitem__(self, item):
+        if not any(isinstance(item, supported_type) for supported_type in (int, slice)):
+            raise TypeError(f'{self.__class__.__name__} indices must be integers or slices.')
+
+        if isinstance(item, slice):
+            self._limit = item.stop
+            return self
+
+        return self.all()[item]
+
     def _where_action(self, *args, **kwargs):
-        where_conds = list(args)
+        where_conds = self._check_pk_lookups(kwargs)
+        where_conds.extend(args)
 
         for key, value in kwargs.items():
             field_name, op = WhereCondition.resolve_lookup(key)
@@ -116,15 +128,7 @@ class QueryExpression:
             self._where = op(self._where, where_cond)
 
     def _extract(self, **kwargs):
-        pk = kwargs.pop(self.model.PK_FIELD, None)
         where_cond = self._where_action(**kwargs)
-        if pk is not None:
-            pk_cond = WhereCondition(self.model.pk_query_name, WhereCondition.EQ, pk)
-            if where_cond:
-                where_cond &= pk_cond
-            else:
-                where_cond = pk_cond
-
         self._reset_where(where_cond, operator.and_)
 
         self_pk = self.model.pk_query_name
@@ -135,11 +139,38 @@ class QueryExpression:
         select_query = (SelectQuery(db=self.model.db, table_name=self.model.table_name, fields=fields)
                         .join(joins)
                         .where(self._where)
+                        .limit(self._limit)
                         .order_by(self._order_by))
 
         params = self._where.values() if self._where else ()
         results = select_query.execute(params=params)
         return results
+
+    def _check_pk_lookups(self, kwargs):
+        pk = kwargs.pop(self.model.PK_FIELD, None)
+
+        conds = []
+
+        if pk is not None:
+            pk_cond = WhereCondition(self.model.pk_query_name, WhereCondition.EQ, pk)
+            conds.append(pk_cond)
+
+        lookups = set()
+        pk_prefix = f'{self.model.PK_FIELD}__'
+
+        for key, value in kwargs.items():
+            if not key.startswith(pk_prefix):
+                continue
+
+            _, op = WhereCondition.resolve_lookup(key)
+            where_cond = WhereCondition(self.model.pk_query_name, op, value)
+            conds.append(where_cond)
+            lookups.add(key)
+
+        for lookup in lookups:
+            kwargs.pop(lookup)
+
+        return conds
 
     def _instance_from_result(self, results):
         row = results[0]

@@ -1,10 +1,8 @@
-from minorm.db import DBDriver
+from minorm.db import SQLiteDatabase
 
 
 def pk_declaration_for_db(db):
-    if db.DRIVER == DBDriver.SQLITE:
+    if isinstance(db, SQLiteDatabase):
         return 'INTEGER PRIMARY KEY AUTOINCREMENT'
-    if db.DRIVER == DBDriver.POSTGRES:
-        return 'SERIAL PRIMARY KEY'
 
     raise ValueError('Unsupported DB type.')

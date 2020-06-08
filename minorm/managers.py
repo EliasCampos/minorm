@@ -90,7 +90,7 @@ class QueryExpression:
             field = self.model.fields[field_name]
             adopted_value = field.to_query_parameter(value)
 
-            where_cond = WhereCondition(field.column_name, op, adopted_value, val_place=self.model.db.VAL_PLACE)
+            where_cond = WhereCondition(field.column_name, op, adopted_value)
             where_conds.append(where_cond)
 
         result = functools.reduce(operator.and_, where_conds) if where_conds else None
@@ -107,7 +107,7 @@ class QueryExpression:
         pk = kwargs.pop(pk_field, None)
         where_cond = self._where_action(**kwargs)
         if pk is not None:
-            pk_cond = WhereCondition(pk_field, WhereCondition.EQ, pk, val_place=self.model.db.VAL_PLACE)
+            pk_cond = WhereCondition(pk_field, WhereCondition.EQ, pk)
             if where_cond:
                 where_cond &= pk_cond
             else:

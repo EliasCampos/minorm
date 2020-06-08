@@ -77,7 +77,7 @@ class TestModel:
 
         select_tables_query = "SELECT name FROM sqlite_master WHERE type='table'"
         result = test_db.execute(select_tables_query, fetch=True)
-        assert (Person._meta.table_name, ) in result
+        assert tuple(result[0]) == (Person._meta.table_name, )
 
     def test_drop_table(self, test_db):
         select_tables_query = "CREATE TABLE test_table (id INTEGER PRIMARY KEY AUTOINCREMENT, x INTEGER)"

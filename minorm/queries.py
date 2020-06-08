@@ -37,6 +37,8 @@ class DMLQuery:
         self.where = where
         self.order_by = order_by
 
+        self.escape = getattr(db, 'escape', '%s')
+
     def execute(self, params=()):
         raw_sql = str(self)
         return self.db.execute(raw_sql, params, fetch=self.FETCH)
@@ -47,7 +49,7 @@ class InsertQuery(DMLQuery):
 
     def __str__(self):
         fields_part = ', '.join(self.fields)
-        values_part = ', '.join(self.db.VAL_PLACE for _ in self.fields)
+        values_part = ', '.join(self.escape for _ in self.fields)
 
         result = f'INSERT INTO {self.table_name} ({fields_part}) VALUES ({values_part});'
         return result
@@ -61,14 +63,15 @@ class UpdateQuery(DMLQuery):
     FETCH = False
 
     def __str__(self):
-        fields_part = ', '.join(f'{field} = {self.db.VAL_PLACE}' for field in self.fields)
+        fields_part = ', '.join(f'{field} = {self.escape}' for field in self.fields)
 
         update_str = f'UPDATE {self.table_name} SET {fields_part}'
         query_parts = [update_str]
 
         if self.where:
             where_part = f'WHERE {self.where}'
-            query_parts.append(where_part)
+            where_part_proper_escape = where_part.format(escape=self.escape)
+            query_parts.append(where_part_proper_escape)
 
         return f"{' '.join(query_parts)};"
 
@@ -84,7 +87,8 @@ class SelectQuery(DMLQuery):
 
         if self.where:
             where_part = f'WHERE {self.where}'
-            query_parts.append(where_part)
+            where_part_proper_escape = where_part.format(escape=self.escape)
+            query_parts.append(where_part_proper_escape)
 
         if self.order_by:
             order_part = ', '.join(str(ordering) for ordering in self.order_by)

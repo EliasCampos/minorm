@@ -24,14 +24,7 @@ def get_default_db():
     return _default_db
 
 
-class DBDriver:
-    SQLITE = 'sqlite3'
-    POSTGRES = 'psycopg2'
-
-
 class Database:
-    DRIVER = None
-    VAL_PLACE = None
 
     def __init__(self, connection_string):
         self.connection_string = connection_string
@@ -43,9 +36,7 @@ class Database:
 
     def connect(self):
         self.disconnect()
-
-        driver = self.get_driver()
-        self._connection = driver.connect(self.connection_string)
+        self._connection = self.get_connection()
 
     def disconnect(self):
         if self._connection:
@@ -72,14 +63,21 @@ class Database:
     def last_insert_row_id(self):
         return self.last_query_lastrowid
 
-    def get_driver(self):
-        driver = __import__(self.DRIVER)
-        return driver
+    def get_connection(self):
+        raise NotImplementedError
 
 
 class SQLiteDatabase(Database):
-    DRIVER = DBDriver.SQLITE
-    VAL_PLACE = '?'
+
+    def get_connection(self):
+        import sqlite3
+        connection = sqlite3.connect(self.connection_string)
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    @property
+    def escape(self):
+        return '?'
 
 
 def read_connection_string():

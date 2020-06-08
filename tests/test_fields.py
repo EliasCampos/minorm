@@ -1,7 +1,8 @@
 import pytest
+from decimal import Decimal
+from datetime import datetime
 
-from minorm.db import SQLiteDatabase
-from minorm.fields import Field, CharField, PrimaryKey, ForeignKey
+from minorm.fields import Field, CharField, DecimalField, DateTimeField, PrimaryKey, ForeignKey
 
 
 class TestField:
@@ -56,3 +57,21 @@ class TestForeignKey:
     def test_column_name(self, test_model):
         fk = ForeignKey(null=False, to=test_model, on_delete=ForeignKey.RESTRICT)
         assert fk.column_name == "person_id"
+
+
+class TestDecimalField:
+
+    def test_adapt(self):
+        val = 4.445
+
+        decimal_field = DecimalField(max_digits=6, decimal_places=2)
+        assert decimal_field.adapt(val) == Decimal('4.44')
+
+
+class TestDateTimeField:
+
+    def test_adapt(self):
+        val = '2020-09-02'
+
+        time_field = DateTimeField(max_digits=6, decimal_places=2)
+        assert time_field.adapt(val) == datetime(2020, 9, 2)

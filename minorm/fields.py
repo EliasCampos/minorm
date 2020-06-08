@@ -1,3 +1,5 @@
+from datetime import datetime
+from decimal import Decimal
 
 
 class NoVal:
@@ -87,6 +89,44 @@ class CharField(_StringField):
 
     def get_field_type(self):
         return f'VARCHAR({self.max_length})'
+
+
+class DecimalField(_StringField):
+
+    def __init__(self, null=False, unique=False, default=NoVal, column_name=None, **extra_kwargs):
+        max_digits = extra_kwargs.pop('max_digits')
+        decimal_places = extra_kwargs.pop('decimal_places')
+
+        super().__init__(null=null, unique=unique, default=default, column_name=column_name, **extra_kwargs)
+
+        self.max_digits = max_digits
+        self.decimal_places = decimal_places
+
+    def get_field_type(self):
+        return f'DECIMAL({self.max_digits}, {self.decimal_places})'
+
+    def adapt(self, value):
+        if not isinstance(value, Decimal):
+            if isinstance(value, float):
+                dec = self.decimal_places
+                return Decimal(round(value * (10 ** dec))) / Decimal(10 ** dec)
+            return Decimal(value)
+        return value
+        # TODO: Method's test!
+
+
+class DateTimeField(Field):
+    FIELD_TYPE = 'TIMESTAMP'
+    FORMATS = ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d')
+
+    def adapt(self, value):
+        if isinstance(value, str):
+            for fmt in self.FORMATS:
+                try:
+                    return datetime.strptime(value, fmt)
+                except ValueError:
+                    pass
+        return value
 
 
 class PrimaryKey(Field):

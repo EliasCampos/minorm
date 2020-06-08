@@ -69,6 +69,7 @@ class QuerySet:
         return instance
 
     def get(self, **kwargs):
+        self._values_mapping = {}
         self._limit = 2
         results = self._extract(**kwargs)
         if not results:
@@ -79,6 +80,7 @@ class QuerySet:
         return self._instance_from_result(results)
 
     def first(self):
+        self._values_mapping = {}
         self._limit = 1
         results = self._extract()
         if not results:
@@ -104,7 +106,7 @@ class QuerySet:
                 for fk in self._related.values():
                     if rel == fk.name:
                         rel_field = fk.to.check_field(rel_field_name, with_pk=True)
-                        self._values_mapping[rel] = rel_field
+                        self._values_mapping[value] = rel_field
                         break
                 else:
                     raise ValueError(f'{rel} does not belong supported relations.')
@@ -137,8 +139,8 @@ class QuerySet:
 
     @property
     def query(self):
-        self_pk = self.model.pk_query_name
-        joins = [JoinExpression.on_pk(fld.to.table_name, self_pk, fld.query_name) for fld in self._related.values()]
+        joins = [JoinExpression.on_pk(fld.to.table_name, fld.query_name, fld.to.pk_query_name)
+                 for fld in self._related.values()]
         query = (SelectQuery(db=self.model.db, table_name=self.model.table_name, fields=self._get_fields())
                  .join(joins)
                  .where(self._where)

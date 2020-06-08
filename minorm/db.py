@@ -1,3 +1,4 @@
+from decimal import Decimal
 import os
 
 
@@ -71,6 +72,10 @@ class SQLiteDatabase(Database):
 
     def get_connection(self):
         import sqlite3
+
+        sqlite3.register_adapter(Decimal, self.adapt_decimal)
+        sqlite3.register_converter("DECIMAL", self.convert_decimal)
+
         connection = sqlite3.connect(self.connection_string)
         connection.row_factory = sqlite3.Row
         return connection
@@ -78,6 +83,14 @@ class SQLiteDatabase(Database):
     @property
     def escape(self):
         return '?'
+
+    @staticmethod
+    def adapt_decimal(val):
+        return str(val)
+
+    @staticmethod
+    def convert_decimal(val):
+        return Decimal(val)
 
 
 def read_connection_string():

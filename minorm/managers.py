@@ -96,7 +96,7 @@ class QuerySet:
         extracted = self._extract()
         if self._values_mapping:
             return [self._dict_from_row(row) for row in extracted]
-        return [self.model.instance_from_row(row, related=self._related) for row in extracted]
+        return [self._instance_from_row(row, self.model, self._related, is_tuple=False) for row in extracted]
 
     def values(self, *args):
         if len(args) == 1 and args[0] is None:
@@ -221,8 +221,32 @@ class QuerySet:
 
     def _instance_from_result(self, results):
         row = results[0]
-        instance = self.model.instance_from_row(row, related=self._related, is_tuple=False)
+        instance = self._instance_from_row(row, self.model, self._related, is_tuple=False)
         return instance
+
+    def _instance_from_row(self, row, model, related=(), is_tuple=True):
+        pk_lookup = f'{model.name}_{model.PK_FIELD}'
+        pk_value = row[pk_lookup]
+
+        kwargs = {}
+        for attr_name, field in model.fields.items():
+            field_lookup = f'{model.name}_{attr_name}'
+            base_value = row[field_lookup]
+
+            if base_value and related and isinstance(field, ForeignKey) and field.to in related:
+                value = self._instance_from_row(row, field.to, related=None, is_tuple=is_tuple)
+            else:
+                value = base_value
+
+            kwargs[attr_name] = value
+
+        if is_tuple:
+            kwargs[model.PK_FIELD] = pk_value
+            return model.query_namedtuple(**kwargs)
+
+        result = model(**kwargs)
+        setattr(result, model.PK_FIELD, pk_value)
+        return result
 
     def _get_fields(self):
         if self._values_mapping:

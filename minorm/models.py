@@ -88,28 +88,6 @@ class ModelMetaclass(type):
     def select_field_names(cls):
         return [field.select_field_name for field in cls._fields.values()]
 
-    def instance_from_row(cls, row, related=(), is_tuple=True):
-        pk_lookup = f'{cls.name}_{cls.PK_FIELD}'
-        pk_value = row[pk_lookup]
-
-        kwargs = {}
-        for attr_name, field in cls.fields.items():
-            if related and isinstance(field, ForeignKey) and field.to in related:
-                value = field.to.instance_from_row(row, related=None, is_tuple=is_tuple)
-            else:
-                field_lookup = f'{cls.name}_{attr_name}'
-                value = row[field_lookup]
-
-            kwargs[attr_name] = value
-
-        if is_tuple:
-            kwargs[cls.PK_FIELD] = pk_value
-            return cls.query_namedtuple(**kwargs)
-
-        result = cls(**kwargs)
-        setattr(result, cls.PK_FIELD, pk_value)
-        return result
-
     def to_sql(cls):
         field_params = [field.to_sql_declaration() for field in cls._fields.values()]
         create_query = CreateTableQuery(db=cls._meta.db, table_name=cls._meta.table_name, params=field_params)

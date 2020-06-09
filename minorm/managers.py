@@ -55,7 +55,7 @@ class QuerySet:
 
         for key, value in kwargs.items():
             field = self.model.check_field(key, with_pk=False)
-            adopted_value = field.adapt(value)
+            adopted_value = field.adapt_value(value)
             update_data[field.column_name] = adopted_value
 
         update_query = UpdateQuery(db=self.model.db, table_name=self.model.table_name, fields=update_data.keys(),
@@ -96,7 +96,7 @@ class QuerySet:
         extracted = self._extract()
         if self._values_mapping:
             return [self._dict_from_row(row) for row in extracted]
-        return [self._instance_from_row(row, self.model, self._related, is_tuple=False) for row in extracted]
+        return [self._instance_from_row(row, self.model, self._related, is_tuple=True) for row in extracted]
 
     def values(self, *args):
         if len(args) == 1 and args[0] is None:

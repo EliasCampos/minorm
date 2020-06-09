@@ -143,7 +143,7 @@ class Model(metaclass=ModelMetaclass):
 
     def _adapt_values(self):
         for name, field in self.__class__.fields.items():
-            adapted_value = field.adapt(getattr(self, name))
+            adapted_value = field.adapt_value(getattr(self, name))
             setattr(self, name, adapted_value)
 
     def refresh_from_db(self):

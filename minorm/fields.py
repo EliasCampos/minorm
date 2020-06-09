@@ -12,41 +12,51 @@ class Field:
     NULL = 'NULL'
 
     def __init__(self, null=False, unique=False, default=NoVal, column_name=None, **extra_kwargs):
-        self.null = null
-        self.unique = unique
+        self._null = null
+        self._unique = unique
 
-        self.default = default
+        self._default = default
+
+        self._extra_kwargs = extra_kwargs
+
         self.column_name = column_name
-
-        self.extra_kwargs = extra_kwargs
-
         self.name = None
         self.model = None
 
     def adapt(self, value):
         return value
 
+    def adapt_value(self, value):
+        if value is None and self._null:
+            return None
+
+        return self.adapt(value)
+
     def to_query_parameter(self, value):
         return value
 
     def default_declaration(self):
-        return str(self.default)
+        return str(self.default) if self._default is not None else self.NULL
 
     def to_sql_declaration(self):
         declaration_parts = [f'{self.column_name} {self.get_field_type()}']
 
-        if not self.null:
+        if not self._null:
             declaration_parts.append('NOT NULL')
-        if self.unique:
+        if self._unique:
             declaration_parts.append('UNIQUE')
-        if self.default is not NoVal:
-            default_sql = self.default_declaration() if self.default is not None else self.NULL
+        if self._default is not NoVal:
+            default_sql = self.default_declaration()
             declaration_parts.append(f'DEFAULT {default_sql}')
 
         return ' '.join(declaration_parts)
 
     def get_field_type(self):
         return self.FIELD_TYPE
+
+    @property
+    def default(self):
+        return self._default if self._default is not NoVal else None
 
     def __set_name__(self, owner, name):
         self.model = owner
@@ -112,7 +122,6 @@ class DecimalField(_StringField):
                 return Decimal(round(value * (10 ** dec))) / Decimal(10 ** dec)
             return Decimal(value)
         return value
-        # TODO: Method's test!
 
 
 class DateTimeField(Field):

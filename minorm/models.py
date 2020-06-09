@@ -3,7 +3,7 @@ from collections import namedtuple, OrderedDict
 from minorm.db import get_default_db
 from minorm.exceptions import DoesNotExists
 from minorm.expressions import WhereCondition
-from minorm.fields import Field, PrimaryKey, ForeignKey
+from minorm.fields import Field, PrimaryKey
 from minorm.managers import QuerySet
 from minorm.queries import CreateTableQuery, DropTableQuery, InsertQuery, UpdateQuery, SelectQuery
 from minorm.utils import pk_declaration_for_db
@@ -37,8 +37,8 @@ class ModelMetaclass(type):
         model = super().__new__(mcs, name, bases, namespace)
         setattr(model, '_fields', fields)
 
-        pk_field.model = model
-        pk_field.name = model.PK_FIELD
+        setattr(pk_field, '_model', model)
+        setattr(pk_field, '_name', model.PK_FIELD)
 
         setattr(model, '_meta', model_metadata(db=db, table_name=table_name))
 

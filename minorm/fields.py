@@ -19,9 +19,9 @@ class Field:
 
         self._extra_kwargs = extra_kwargs
 
-        self.column_name = column_name
-        self.name = None
-        self.model = None
+        self._column_name = column_name
+        self._name = None
+        self._model = None
 
     def adapt(self, value):
         return value
@@ -58,11 +58,23 @@ class Field:
     def default(self):
         return self._default if self._default is not NoVal else None
 
+    @property
+    def column_name(self):
+        return self._column_name
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def model(self):
+        return self._model
+
     def __set_name__(self, owner, name):
-        self.model = owner
-        self.name = name
-        if not self.column_name:
-            self.column_name = name
+        self._model = owner
+        self._name = name
+        if not self._column_name:
+            self._column_name = name
 
     @property
     def query_name(self):
@@ -147,8 +159,8 @@ class PrimaryKey(Field):
         super().__init__(**kwargs)
         self.pk_declaration = kwargs['pk_declaration']
 
-        self.model = kwargs.get('model')
-        self.name = kwargs.get('name')
+        self._model = kwargs.get('model')
+        self._name = kwargs.get('name')
 
     def get_field_type(self):
         return self.pk_declaration
@@ -172,8 +184,6 @@ class ForeignKey(Field):
         self.on_delete = on_delete
 
     def adapt(self, value):
-        if value is None:
-            return None
         if isinstance(value, self.to):
             return value.pk
         return int(value)

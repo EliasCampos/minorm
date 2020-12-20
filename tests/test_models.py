@@ -162,3 +162,13 @@ class TestModel:
         assert instance.pk == 1
         assert instance.name == 'foobar'
         assert instance.age == 42
+
+    def test_delete(self, test_model):
+        instance = test_model(name="john", age=33)
+        instance.save()
+        instance_id = instance.pk
+
+        result = instance.delete()
+        assert result == 1
+        assert not instance.pk
+        assert not test_model.qs.filter(id=instance_id).exists()

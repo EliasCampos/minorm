@@ -1,20 +1,20 @@
 MinORM
-==================
+======
 
 A minimalistic ORM with basic features.
 
 Inspired by Django ORM.
 
 What's the point?
--------------------
+-----------------
 MinORM was designed as minimalistic to ORM, to be as simple as possible.
 It's not production-ready solution, rather a proof of concept. The goal is to demonstrate example of an ORM,
 more-less applicable for usage, that could be created with python in a couple of days.
 
 Usage
--------------------
+-----
 DB Connection
-********************
+*************
 
 Establish connection to database by calling :code:`.connect()` method of :code:`connector` object, with certain db handler.
 
@@ -44,7 +44,7 @@ Close connection by calling :code:`.disconnect()` method:
     connector.disconnect()
 
 Models
-********************
+******
 
 Create a model class that represents a single table in a database:
 
@@ -79,7 +79,7 @@ It's possible to drop a table:
 
     Person.drop_table()
 
-Create a new instance in db by calling :code:`save` method:
+Create a new instance or update existing one in db by calling :code:`save` method:
 
 .. code:: python
 
@@ -90,6 +90,12 @@ Create a new instance in db by calling :code:`save` method:
 
     book = Book(title="foobar")  # or pass it in init method
     book.save()
+
+Remove a row for in db by calling :code:`delete` method:
+
+.. code:: python
+
+    person.delete()
 
 Create a model with foreign relation by using :code:`ForeignKey` field:
 
@@ -107,17 +113,8 @@ Pass an instance of related model when saving a new one:
     book.save()
 
 Queryset methods
-********************
+****************
 Use queryset, accessible by model's :code:`qs` property, to perform db queries:
-
-:code:`get()`: Get single row as an instance of the class:
-
-.. code:: python
-
-    person = Person.qs.filter(id=7).get()  # model instance object
-
-raises :code:`Model.DoesNotExists` if corresponding row not found in db,
-and :code:`MultipleQueryResult` if more than one row matches query filters.
 
 :code:`all()`: Get all rows as a list of namedtuple objects:
 
@@ -135,7 +132,7 @@ it's possible to limit number of selected rows by using slices:
 
 .. code:: python
 
-    values_qs = Book.qs.values('title', 'author__name')  # all books with title and name of author
+    values_qs = Book.qs.values('title', 'author__name')  # dicts with this two keys
     books = values_qs.all()  # this method call will actually hit db, not previous
 
 :code:`filter(**lookups)`: Filter query, result will contain only items that matches all lookups:
@@ -160,6 +157,20 @@ it's possible to limit number of selected rows by using slices:
     Book.qs.order_by('created')  # for oldest to newest
     Person.qs.order_by('-id')  # reverse ordering by id
 
+:code:`exists()`: Return boolean, that indicates presence of rows that match filters:
+
+.. code:: python
+
+    Person.qs.filter(name="mike").exists()  # True if there is the name, otherwise False
+
+:code:`get()`: Get single row as an instance of the class:
+
+.. code:: python
+
+    person = Person.qs.filter(id=7).get()  # model instance object
+
+raises :code:`Model.DoesNotExists` if corresponding row not found in db,
+and :code:`MultipleQueryResult` if more than one row matches query filters.
 
 :code:`create(**field_values)`: Create a new instance in db:
 
@@ -187,6 +198,16 @@ is a shortcut for two calls:
 
     Product.qs.filter(created__lt=date(2020, 11, 10)).delete()
 
+:code:`bulk_create(instances)`: Create multiple instances in one db query:
+
+.. code:: python
+
+    Book.qs.bulk_create([
+        Book(title="foo", author=1),
+        Book(title="bar", author=2),
+        Book(title="baz", author=1),
+    ])  # creates all these books in one query
+
 
 :code:`select_related(*fk_fields)`: Prepare queryset to perform select query with join of foreign relation:
 
@@ -197,7 +218,7 @@ is a shortcut for two calls:
         print(book.title, author.name)
 
 TODO
--------------------
+----
 * add more model fields
 * add join of 3 and more tables in `select_related`
 * add filter lookups over fields of foreign relations
@@ -214,7 +235,7 @@ To run tests, create virtual environment and then run:
     make test
 
 License
----------
+-------
 The MIT License (MIT)
 
 

@@ -5,7 +5,7 @@ from minorm.exceptions import DoesNotExists
 from minorm.expressions import WhereCondition
 from minorm.fields import AutoField, Field
 from minorm.managers import QuerySet
-from minorm.queries import CreateTableQuery, DropTableQuery, InsertQuery, UpdateQuery, SelectQuery
+from minorm.queries import CreateTableQuery, DeleteQuery, DropTableQuery, InsertQuery, UpdateQuery, SelectQuery
 
 
 model_metadata = namedtuple('Meta', 'db, table_name')
@@ -168,3 +168,18 @@ class Model(metaclass=ModelMetaclass):
             row = curr.fetchone()
         for i, field in enumerate(model.fields):
             setattr(self, field.name, row[i])
+
+    def delete(self):
+        if not self.pk:
+            return
+
+        model = self.__class__
+        pk_cond = WhereCondition(model.pk_field.query_name, WhereCondition.EQ, self.pk)
+        delete_query = DeleteQuery(table_name=model.table_name, where=pk_cond)
+
+        raw_sql = delete_query.render_sql(model.db.spec)
+        with model.db.cursor() as curr:
+            curr.execute(raw_sql, pk_cond.values())
+
+        setattr(self, model.pk_field.name, None)
+        return curr.rowcount

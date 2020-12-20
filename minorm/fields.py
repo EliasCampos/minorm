@@ -161,14 +161,12 @@ class AutoField(Field):
 
 class ForeignKey(Field):
 
-    def __init__(self, pk=False, null=False, unique=False, default=None, column_name=None, **extra_kwargs):
-        ref_model = extra_kwargs.pop('to')
-
+    def __init__(self, to, pk=False, null=False, unique=False, default=None, column_name=None):
         if not column_name:
-            column_name = f"{ref_model.table_name}_id"
+            column_name = f"{to.table_name}_id"
 
         super().__init__(pk=pk, null=null, unique=unique, default=default, column_name=column_name)
-        self.to = ref_model
+        self.to = to
 
     def adapt(self, value):
         if isinstance(value, self.to):

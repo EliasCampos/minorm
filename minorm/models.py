@@ -91,13 +91,13 @@ class ModelMetaclass(type):
     def query_names(cls):
         return [field.query_name for field in cls.fields]
 
-    def to_sql(cls):
+    def render_sql(cls):
         field_params = [field.render_sql() for field in cls.fields]
         create_query = CreateTableQuery(table_name=cls.table_name, params=field_params)
         return create_query.render_sql()
 
     def create_table(cls):
-        raw_sql = cls.to_sql()
+        raw_sql = cls.render_sql()
         with cls.db.cursor() as curr:
             curr.execute(raw_sql)
 

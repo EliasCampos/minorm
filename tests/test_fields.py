@@ -95,9 +95,9 @@ class TestAutoField:
 class TestForeignKey:
 
     def test_render_sql_type(self, test_model):
-        fk = ForeignKey(null=False, to=test_model)
+        fk = ForeignKey(to=test_model, null=False)
         assert fk.render_sql_type() == "INTEGER REFERENCES person (id)"  # table name and pk are from model fixture
 
     def test_column_name(self, test_model):
-        fk = ForeignKey(null=False, to=test_model)
+        fk = ForeignKey(to=test_model, null=False)
         assert fk.column_name == "person_id"  # table name is from model fixture

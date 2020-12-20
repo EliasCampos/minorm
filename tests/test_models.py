@@ -43,7 +43,7 @@ class TestModel:
         assert isinstance(qs, QuerySet)
         assert qs.model == Person
 
-    def test_to_sql(self, test_db):
+    def test_render_sql(self, test_db):
         class Person(Model):
             name = CharField(max_length=50)
             last_name = CharField(max_length=44, null=True)
@@ -53,12 +53,14 @@ class TestModel:
             class Meta:
                 db = test_db
 
-        assert Person.to_sql() == ("CREATE TABLE person ("
-                                   "name VARCHAR(50) NOT NULL, "
-                                   "last_name VARCHAR(44), "
-                                   "age INTEGER, "
-                                   "score INTEGER, "
-                                   "id INTEGER PRIMARY KEY AUTOINCREMENT);")
+        assert Person.render_sql() == (
+            "CREATE TABLE person ("
+            "name VARCHAR(50) NOT NULL, "
+            "last_name VARCHAR(44), "
+            "age INTEGER, "
+            "score INTEGER, "
+            "id INTEGER PRIMARY KEY AUTOINCREMENT);"
+        )
 
     def test_create_table(self, test_db):
         class Person(Model):

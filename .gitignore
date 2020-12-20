@@ -8,7 +8,7 @@
 .venv/
 
 # eggs:
-minorm.egg-info/*
+MinORM.egg-info/*
 
 # tox:
 .tox/

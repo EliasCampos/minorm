@@ -7,7 +7,7 @@ Inspired by Django ORM.
 
 What's the point?
 -----------------
-MinORM was designed as minimalistic to ORM, to be as simple as possible.
+MinORM was designed as minimalistic ORM, to be as simple as possible.
 It's not production-ready solution, rather a proof of concept. The goal is to demonstrate example of an ORM,
 more-less applicable for usage, that could be created with python in a couple of days.
 
@@ -91,7 +91,7 @@ Create a new instance or update existing one in db by calling :code:`save` metho
     book = Book(title="foobar")  # or pass it in init method
     book.save()
 
-Remove a row for in db by calling :code:`delete` method:
+Remove a row from db by calling :code:`delete` method:
 
 .. code:: python
 
@@ -161,7 +161,7 @@ it's possible to limit number of selected rows by using slices:
 
 .. code:: python
 
-    Person.qs.filter(name="mike").exists()  # True if there is the name, otherwise False
+    Person.qs.filter(name="mike").exists()  # True if there is such name, otherwise False
 
 :code:`get()`: Get single row as an instance of the class:
 

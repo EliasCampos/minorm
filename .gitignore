@@ -1,6 +1,14 @@
+# python cache
+*.pyc
 
 # IDE:
-.idea
+.idea/
 
-# python cache:
-__pycache__
+# Virtual environment:
+.venv/
+
+# eggs:
+minorm.egg-info/*
+
+# tox:
+.tox/

@@ -45,28 +45,32 @@ class QuerySet:
 
         for field_name in args:
             field = self.model.check_field(field_name, with_pk=True)
-            if isinstance(field, ForeignKey):
+            if isinstance(field, ForeignKey):  # TODO: multiple tables in one join
                 self._related[field.to] = field
 
         return self
 
     def update(self, **kwargs):
         update_data = OrderedDict()
-
         for key, value in kwargs.items():
             field = self.model.check_field(key, with_pk=False)
             adopted_value = field.adapt_value(value)
             update_data[field.column_name] = adopted_value
 
-        update_query = UpdateQuery(db=self.model.db, table_name=self.model.table_name, fields=update_data.keys(),
-                                   where=self._where)
+        update_query = UpdateQuery(table_name=self.model.table_name, fields=update_data.keys(), where=self._where)
+        raw_sql = update_query.render_sql(self.model.db.spec)
         params = tuple(update_data.values()) + (self._where.values() if self._where else ())
-        update_query.execute(params=params)
+        with self.model.db.cursor() as curr:
+            curr.execute(raw_sql, params)
+        return curr.rowcount
 
     def delete(self):
-        delete_query = DeleteQuery(db=self.model.db, table_name=self.model.table_name, where=self._where)
-        delete_query.execute(params=self.query_params)
-        return self.model.db.last_query_rowcount
+        delete_query = DeleteQuery(table_name=self.model.table_name, where=self._where)
+        raw_sql = delete_query.render_sql(self.model.db.spec)
+
+        with self.model.db.cursor() as curr:
+            curr.execute(raw_sql, self.query_params)
+        return curr.rowcount
 
     def create(self, **kwargs):
         instance = self.model(**kwargs)
@@ -124,7 +128,7 @@ class QuerySet:
 
     def exists(self):
         self.select_related(None)
-        self.values(self.model.PK_FIELD)
+        self.values(self.model.pk_field.column_name)
         self._limit = 1
 
         is_exists = bool(self._extract())
@@ -132,21 +136,18 @@ class QuerySet:
 
     def bulk_create(self, instances):
         model = self.model
-
-        field_names = model.fields.keys()
-        column_names = [field.column_name for field in model.fields.values()]
-        values = [[getattr(obj, name) for name in field_names] for obj in instances if isinstance(obj, model)]
-
-        operation = InsertQuery(db=model.db, table_name=model.table_name, fields=column_names)
-        operation.execute_many(params=values)
-
-        return model.db.last_query_rowcount
+        insert_query = InsertQuery(table_name=model.table_name, fields=[field.column_name for field in model.fields])
+        raw_sql = insert_query.render_sql(model.db.spec)
+        params = [[getattr(obj, field.name) for field in model.fields] for obj in instances if isinstance(obj, model)]
+        with model.db.cursor() as curr:
+            curr.executemany(raw_sql, params)
+        return curr.rowcount
 
     @property
     def query(self):
-        joins = [JoinExpression.on_pk(fld.to.table_name, fld.query_name, fld.to.pk_query_name)
+        joins = [JoinExpression.on_pk(fld.to.table_name, fld.query_name, fld.to.pk_field.query_name)
                  for fld in self._related.values()]
-        query = (SelectQuery(db=self.model.db, table_name=self.model.table_name, fields=self._get_fields())
+        query = (SelectQuery(table_name=self.model.table_name, fields=self._get_fields())
                  .join(joins)
                  .where(self._where)
                  .limit(self._limit)
@@ -194,7 +195,12 @@ class QuerySet:
 
         select_query = self.query
         params = self.query_params
-        results = select_query.execute(params=params)
+
+        raw_sql = select_query.render_sql(self.model.db.spec)
+
+        with self.model.db.cursor() as curr:
+            curr.execute(raw_sql, params)
+            results = curr.fetchall()
         return results
 
     def _dict_from_row(self, row):
@@ -204,13 +210,13 @@ class QuerySet:
         conds = []
         lookups = set()
 
-        pk_prefix = f'{self.model.PK_FIELD}__'
+        pk_prefix = f'{self.model.pk_field.name}__'
         for key, value in kwargs.items():
             if not key.startswith(pk_prefix):
                 continue
 
             _, op = WhereCondition.resolve_lookup(key)
-            where_cond = WhereCondition(self.model.pk_query_name, op, value)
+            where_cond = WhereCondition(self.model.pk_field.query_name, op, value)
             conds.append(where_cond)
             lookups.add(key)
 
@@ -225,11 +231,9 @@ class QuerySet:
         return instance
 
     def _instance_from_row(self, row, model, related=(), is_tuple=True):
-        pk_lookup = f'{model.name}_{model.PK_FIELD}'
-        pk_value = row[pk_lookup]
-
         kwargs = {}
-        for attr_name, field in model.fields.items():
+        for field in model.fields:
+            attr_name = field.name
             field_lookup = f'{model.name}_{attr_name}'
             base_value = row[field_lookup]
 
@@ -241,11 +245,9 @@ class QuerySet:
             kwargs[attr_name] = value
 
         if is_tuple:
-            kwargs[model.PK_FIELD] = pk_value
             return model.query_namedtuple(**kwargs)
 
         result = model(**kwargs)
-        setattr(result, model.PK_FIELD, pk_value)
         return result
 
     def _get_fields(self):

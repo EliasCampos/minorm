@@ -1,71 +1,75 @@
-from collections import namedtuple, OrderedDict
+from collections import namedtuple
 
-from minorm.db import get_default_db
+from minorm.connectors import connector
 from minorm.exceptions import DoesNotExists
 from minorm.expressions import WhereCondition
-from minorm.fields import Field, PrimaryKey
+from minorm.fields import AutoField, Field
 from minorm.managers import QuerySet
 from minorm.queries import CreateTableQuery, DropTableQuery, InsertQuery, UpdateQuery, SelectQuery
-from minorm.utils import pk_declaration_for_db
 
 
 model_metadata = namedtuple('Meta', 'db, table_name')
 
 
+class ModelSetupError(Exception):
+    pass
+
+
 class ModelMetaclass(type):
-    PK_FIELD = 'id'
 
     def __new__(mcs, name, bases, namespace):
         if not bases:
             return super().__new__(mcs, name, bases, namespace)
 
-        # Extract fields:
-        fields = OrderedDict()
-        for attr_name, class_attr in namespace.items():
-            if isinstance(class_attr, Field):
-                fields[attr_name] = class_attr
-
-        # Extract meta
+        fields = [class_attr for class_attr in namespace.values() if isinstance(class_attr, Field)]
+        # Extract model meta
         meta = namespace.pop('Meta', None)
         table_name = getattr(meta, 'table_name', name.lower())
-        db = getattr(meta, 'db', None) or get_default_db()
+        db = getattr(meta, 'db', connector)
 
-        pk_field = PrimaryKey(column_name=mcs.PK_FIELD, pk_declaration=pk_declaration_for_db(db))
-        fields[mcs.PK_FIELD] = pk_field
+        queryset_class = namespace.pop('queryset_class', QuerySet)
 
-        # Create and set params:
+        # Extract primary key:
+        pk_fields = [field for field in fields if field.is_pk]
+        if len(pk_fields) > 1:
+            raise ModelSetupError('Model should have only one primary key.')
+        if pk_fields:
+            pk_field = pk_fields[0]
+        else:
+            pk_field = AutoField(pk=True, column_name='id')
+            setattr(pk_field, '_name', 'id')
+        fields.append(pk_field)
+
+        # Setup model pk, meta and queryset attributes:
         model = super().__new__(mcs, name, bases, namespace)
         setattr(model, '_fields', fields)
-
-        setattr(pk_field, '_model', model)
-        setattr(pk_field, '_name', model.PK_FIELD)
+        if not pk_field.model:
+            setattr(pk_field, '_model', model)
 
         setattr(model, '_meta', model_metadata(db=db, table_name=table_name))
 
-        does_not_exists = type(f'{model.__name__}DoesNotExists', (DoesNotExists, ), {})
+        setattr(model, '_queryset_class', queryset_class)
+
+        does_not_exists = type(f'{model.__name__}DoesNotExists', (DoesNotExists,), {})
         setattr(model, 'DoesNotExists', does_not_exists)
 
-        query_namedtuple = namedtuple(f'{model.__name__}QueryNamedTuple', field_names=model.all_field_names)
+        query_namedtuple = namedtuple(f'{model.__name__}QueryNamedTuple',
+                                      field_names=[field.name for field in model.fields])
         setattr(model, 'query_namedtuple', query_namedtuple)
 
         return model
 
     @property
-    def objects(cls):
-        return QuerySet(model=cls)
+    def qs(cls):
+        return cls._queryset_class(model=cls)
 
     @property
     def fields(cls):
-        return OrderedDict((name, field) for name, field in cls._fields.items() if name != cls.PK_FIELD)
+        return tuple(cls._fields)
 
     @property
-    def all_field_names(cls):
-        return [name for name in cls._fields.keys()]
-
-    @property
-    def pk_query_name(cls):
-        pk_field = cls._fields[cls.PK_FIELD]
-        return pk_field.query_name
+    def pk_field(cls):
+        return next((field for field in cls.fields if field.is_pk))
 
     @property
     def db(cls):
@@ -81,45 +85,47 @@ class ModelMetaclass(type):
 
     @property
     def column_names(cls):
-        pk_field = cls.PK_FIELD
-        return [pk_field] + [field.column_name for field in cls.fields.values()]
+        return [field.column_name for field in cls.fields]
 
     @property
     def select_field_names(cls):
-        return [field.select_field_name for field in cls._fields.values()]
+        return [field.select_field_name for field in cls.fields]
 
     def to_sql(cls):
-        field_params = [field.to_sql_declaration() for field in cls._fields.values()]
-        create_query = CreateTableQuery(db=cls._meta.db, table_name=cls._meta.table_name, params=field_params)
-        return str(create_query)
+        field_params = [field.render_sql() for field in cls.fields]
+        create_query = CreateTableQuery(table_name=cls.table_name, params=field_params)
+        return create_query.render_sql()
 
     def create_table(cls):
-        field_params = [field.to_sql_declaration() for field in cls._fields.values()]
-        create_query = CreateTableQuery(db=cls._meta.db, table_name=cls._meta.table_name, params=field_params)
-        return create_query.execute()
+        raw_sql = cls.to_sql()
+        with cls.db.cursor() as curr:
+            curr.execute(raw_sql)
 
     def drop_table(cls):
-        drop_query = DropTableQuery(db=cls._meta.db, table_name=cls._meta.table_name)
-        return drop_query.execute()
+        drop_query = DropTableQuery(table_name=cls.table_name)
+        raw_sql = drop_query.render_sql()
+        with cls.db.cursor() as curr:
+            curr.execute(raw_sql)
 
     def check_field(cls, field_name, with_pk=False):
-        if field_name not in cls._fields or field_name == cls.PK_FIELD and not with_pk:
-            raise ValueError(f'{field_name} is not a valid field for model {cls.__name__}.')
+        for field in cls.fields:
+            if field.name == field_name and (not field.is_pk or with_pk):
+                return field
 
-        return cls._fields[field_name]
+        raise ValueError(f'{field_name} is not a valid field for model {cls.__name__}.')
 
 
 class Model(metaclass=ModelMetaclass):
 
     def __init__(self, **kwargs):
-        setattr(self, self.__class__.PK_FIELD, None)
-        for field_name, field in self.__class__.fields.items():
-            value = kwargs.get(field_name, field.default)
+        for field in self.__class__.fields:
+            field_name = field.name
+            value = kwargs.get(field_name, field.get_default())
             setattr(self, field_name, value)
 
     @property
     def pk(self):
-        return getattr(self, self.__class__.PK_FIELD)
+        return getattr(self, self.__class__.pk_field.name)
 
     def save(self):
         is_creation = not bool(self.pk)
@@ -127,35 +133,39 @@ class Model(metaclass=ModelMetaclass):
 
         model = self.__class__
 
-        column_names = [field.column_name for field in model.fields.values()]
-        values = [getattr(self, field_name) for field_name in model.fields.keys()]
-
+        modified_fields = [field for field in model.fields if not isinstance(field, AutoField)]
         if is_creation:
-            operation_class = InsertQuery
+            query_class = InsertQuery
         else:
-            operation_class = UpdateQuery
-
-        operation = operation_class(db=model.db, table_name=model.table_name, fields=column_names)
-        operation.execute(params=values)
-
+            query_class = UpdateQuery
+        query = query_class(table_name=model.table_name, fields=[field.column_name for field in modified_fields])
+        raw_sql = query.render_sql(model.db.spec)
+        params = [getattr(self, field.name) for field in modified_fields]
+        with model.db.cursor() as curr:
+            curr.execute(raw_sql, params)
         if is_creation:
-            setattr(self, self.__class__.PK_FIELD, model.db.last_insert_row_id())
+            setattr(self, model.pk_field.name, curr.lastrowid)
 
     def _adapt_values(self):
-        for name, field in self.__class__.fields.items():
-            adapted_value = field.adapt_value(getattr(self, name))
-            setattr(self, name, adapted_value)
+        for field in self.__class__.fields:
+            field_name = field.name
+            adapted_value = field.adapt_value(getattr(self, field_name))
+            setattr(self, field_name, adapted_value)
 
     def refresh_from_db(self):
         if not self.pk:
             return
+
         model = self.__class__
-        pk_cond = WhereCondition(model.PK_FIELD, WhereCondition.EQ, self.pk)
-        fields = [field.column_name for field in model.fields.values()]
-        select_query = SelectQuery(db=model.db, table_name=model.table_name,
-                                   fields=fields, where=pk_cond)
-        result = select_query.execute(params=pk_cond.values())
-        row = result[0]
-        for attr_name, field in model.fields.items():
+
+        pk_cond = WhereCondition(model.pk_field.column_name, WhereCondition.EQ, self.pk)
+        fields = [field.column_name for field in model.fields]
+        select_query = SelectQuery(table_name=model.table_name, fields=fields, where=pk_cond)
+        raw_sql = select_query.render_sql(model.db.spec)
+        params = pk_cond.values()
+        with model.db.cursor() as curr:
+            curr.execute(raw_sql, params)
+            row = curr.fetchone()
+        for field in model.fields:
             value = row[field.column_name]
-            setattr(self, attr_name, value)
+            setattr(self, field.name, value)

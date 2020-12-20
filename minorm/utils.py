@@ -1,4 +1,4 @@
-from minorm.db import SQLiteDatabase
+from minorm.connectors import SQLiteDatabase
 
 
 def pk_declaration_for_db(db):

@@ -1,54 +1,49 @@
 import pytest
 
-from minorm.db import SQLiteDatabase
-from minorm.fields import CharField, IntegerField, ForeignKey
+from minorm.fields import AutoField, CharField, IntegerField
 from minorm.managers import QuerySet
-from minorm.models import Model
-
-
-@pytest.fixture(scope="function")
-def fake_db():
-    return SQLiteDatabase("sqlite://")
+from minorm.models import Model, ModelSetupError
 
 
 class TestModel:
 
-    def test_new(self, fake_db, mocker):
-        mocker.patch('minorm.models.get_default_db')
-
+    def test_new(self, test_db):
         class Person(Model):
             name = CharField(max_length=120)
             age = IntegerField(column_name='test_column')
 
             class Meta:
                 table_name = 'test_model_table'
-                db = fake_db
+                db = test_db
 
-        assert 'name' in Person._fields
-        assert Person._fields['name'].column_name == 'name'
+        assert len(Person._fields) == 2 + 1  # custom fields + auto created primary key
+        assert Person._fields[0].column_name == 'name'
+        assert Person._fields[1].column_name == 'test_column'
+        assert Person._fields[2].column_name == 'id'
 
-        assert 'age' in Person._fields
-        assert Person._fields['age'].column_name == 'test_column'
-
-        assert Person._meta.db == fake_db
+        assert Person._meta.db == test_db
         assert Person._meta.table_name == 'test_model_table'
 
-    def test_objects(self, mocker, fake_db):
-        db_mock = mocker.patch('minorm.models.get_default_db')
-        db_mock.return_value = fake_db
+    def test_new_multiple_pks(self, test_db):
+        with pytest.raises(ModelSetupError, match=r'.*primary\s+key.*'):
+            class SomeModel(Model):
+                id = AutoField(pk=True)
+                name = CharField(max_length=120, pk=True)
 
+                class Meta:
+                    table_name = 'test_model_table'
+                    db = test_db
+
+    def test_qs(self):
         class Person(Model):
             name = CharField(max_length=255)
             age = IntegerField()
 
-        qs = Person.objects
+        qs = Person.qs
         assert isinstance(qs, QuerySet)
         assert qs.model == Person
 
-    def test_to_sql(self, mocker, fake_db):
-        db_mock = mocker.patch('minorm.models.get_default_db')
-        db_mock.return_value = fake_db
-
+    def test_to_sql(self, test_db):
         class Person(Model):
             name = CharField(max_length=50)
             last_name = CharField(max_length=44, null=True)
@@ -56,13 +51,13 @@ class TestModel:
             score = IntegerField(null=True, default=None)
 
             class Meta:
-                db = fake_db
+                db = test_db
 
         assert Person.to_sql() == ("CREATE TABLE person ("
                                    "name VARCHAR(50) NOT NULL, "
                                    "last_name VARCHAR(44), "
-                                   "age INTEGER DEFAULT 42, "
-                                   "score INTEGER DEFAULT NULL, "
+                                   "age INTEGER, "
+                                   "score INTEGER, "
                                    "id INTEGER PRIMARY KEY AUTOINCREMENT);")
 
     def test_create_table(self, test_db):
@@ -76,12 +71,16 @@ class TestModel:
         Person.create_table()
 
         select_tables_query = "SELECT name FROM sqlite_master WHERE type='table'"
-        result = test_db.execute(select_tables_query, fetch=True)
+
+        with test_db.cursor() as curr:
+            curr.execute(select_tables_query)
+            result = curr.fetchall()
         assert tuple(result[0]) == (Person._meta.table_name, )
 
     def test_drop_table(self, test_db):
-        select_tables_query = "CREATE TABLE test_table (id INTEGER PRIMARY KEY AUTOINCREMENT, x INTEGER)"
-        test_db.execute(select_tables_query)
+        create_tables_query = "CREATE TABLE test_table (id INTEGER PRIMARY KEY AUTOINCREMENT, x INTEGER)"
+        with test_db.cursor() as curr:
+            curr.execute(create_tables_query)
 
         class Person(Model):
             x = IntegerField(null=True)
@@ -93,23 +92,26 @@ class TestModel:
         Person.drop_table()
 
         select_tables_query = "SELECT name FROM sqlite_master WHERE type='table'"
-        result = test_db.execute(select_tables_query, fetch=True)
+        with test_db.cursor() as curr:
+            curr.execute(select_tables_query)
+            result = curr.fetchall()
         assert (Person._meta.table_name, ) not in result
 
-    def test_check_field(self, mocker, fake_db):
-        db_mock = mocker.patch('minorm.models.get_default_db')
-        db_mock.return_value = fake_db
+    def test_check_field(self, test_db):
+        class Person(Model):
+            title = CharField(max_length=120)
 
+        result = Person.check_field('title')
+        assert result.name == 'title'
+
+    def test_check_field_invalid_field(self, test_db):
         class Person(Model):
             name = CharField(max_length=120)
 
         with pytest.raises(ValueError, match='.*age.*'):
             Person.check_field('age')
 
-    def test_init(self, mocker, fake_db):
-        db_mock = mocker.patch('minorm.models.get_default_db')
-        db_mock.return_value = fake_db
-
+    def test_init(self, test_db):
         class Person(Model):
             name = CharField(max_length=120)
             age = IntegerField(default=19)
@@ -152,9 +154,7 @@ class TestModel:
     def test_refresh_from_db(self, test_model):
         instance = test_model(name="john", age=33)
         instance.save()
-
-        test_model.objects.filter(id=instance.id).update(name='foobar', age=42)
-
+        test_model.qs.filter(id=instance.id).update(name='foobar', age=42)
         instance.refresh_from_db()
 
         assert instance.pk == 1

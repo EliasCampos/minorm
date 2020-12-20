@@ -2,23 +2,14 @@ from datetime import datetime
 from decimal import Decimal
 
 
-class NoVal:
-    pass
-
-
 class Field:
-    FIELD_TYPE = None
+    SQL_TYPE = None
 
-    NULL = 'NULL'
-
-    def __init__(self, null=False, unique=False, default=NoVal, column_name=None, **extra_kwargs):
+    def __init__(self, pk=False, null=False, unique=False, default=None, column_name=None):
+        self._pk = pk
         self._null = null
         self._unique = unique
-
         self._default = default
-
-        self._extra_kwargs = extra_kwargs
-
         self._column_name = column_name
         self._name = None
         self._model = None
@@ -35,28 +26,32 @@ class Field:
     def to_query_parameter(self, value):
         return value
 
-    def default_declaration(self):
-        return str(self.default) if self._default is not None else self.NULL
+    def render_sql(self):
+        column_name = self.column_name
+        sql_type = self.render_sql_type()
 
-    def to_sql_declaration(self):
-        declaration_parts = [f'{self.column_name} {self.get_field_type()}']
+        constrains = self.get_field_constrains()
 
+        sql_parts = [column_name, sql_type, *constrains]
+        return ' '.join(sql_parts)
+
+    def get_field_constrains(self):
+        constrains = []
+        if self._pk:
+            constrains.append('PRIMARY KEY')
         if not self._null:
-            declaration_parts.append('NOT NULL')
+            constrains.append('NOT NULL')
         if self._unique:
-            declaration_parts.append('UNIQUE')
-        if self._default is not NoVal:
-            default_sql = self.default_declaration()
-            declaration_parts.append(f'DEFAULT {default_sql}')
+            constrains.append('UNIQUE')
+        return constrains
 
-        return ' '.join(declaration_parts)
+    def render_sql_type(self):
+        return self.SQL_TYPE
 
-    def get_field_type(self):
-        return self.FIELD_TYPE
-
-    @property
-    def default(self):
-        return self._default if self._default is not NoVal else None
+    def get_default(self):
+        if callable(self._default):
+            return self._default()
+        return self._default
 
     @property
     def column_name(self):
@@ -77,6 +72,10 @@ class Field:
             self._column_name = name
 
     @property
+    def is_pk(self):
+        return bool(self._pk)
+
+    @property
     def query_name(self):
         return f'{self.model.table_name}.{self.column_name}'
 
@@ -86,11 +85,19 @@ class Field:
 
 
 class IntegerField(Field):
-    FIELD_TYPE = 'INTEGER'
+    SQL_TYPE = 'INTEGER'
     adapt = int
 
 
-class _StringField(Field):
+class CharField(Field):
+
+    def __init__(self, pk=False, null=False, unique=False, default=None, column_name=None, **extra_kwargs):
+        max_length = extra_kwargs.pop('max_length')
+        super().__init__(pk=pk, null=null, unique=unique, default=default, column_name=column_name)
+        self.max_length = min(int(max_length), 255)
+
+    def render_sql_type(self):
+        return f'VARCHAR({self.max_length})'
 
     def adapt(self, value):
         if not value:
@@ -102,42 +109,31 @@ class _StringField(Field):
         return str(value)
 
 
-class CharField(_StringField):
+class DecimalField(Field):
 
-    def __init__(self, null=False, unique=False, default=NoVal, column_name=None, **extra_kwargs):
-        max_length = extra_kwargs.pop('max_length')
-        super().__init__(null=null, unique=unique, default=default, column_name=column_name, **extra_kwargs)
-        self.max_length = min(int(max_length), 255)
-
-    def get_field_type(self):
-        return f'VARCHAR({self.max_length})'
-
-
-class DecimalField(_StringField):
-
-    def __init__(self, null=False, unique=False, default=NoVal, column_name=None, **extra_kwargs):
+    def __init__(self, pk=False, null=False, unique=False, default=None, column_name=None, **extra_kwargs):
         max_digits = extra_kwargs.pop('max_digits')
         decimal_places = extra_kwargs.pop('decimal_places')
 
-        super().__init__(null=null, unique=unique, default=default, column_name=column_name, **extra_kwargs)
+        super().__init__(pk, null=null, unique=unique, default=default, column_name=column_name)
 
-        self.max_digits = max_digits
-        self.decimal_places = decimal_places
+        self._max_digits = max_digits
+        self._decimal_places = decimal_places
 
-    def get_field_type(self):
-        return f'DECIMAL({self.max_digits}, {self.decimal_places})'
+    def render_sql_type(self):
+        return f'DECIMAL({self._max_digits}, {self._decimal_places})'
 
     def adapt(self, value):
         if not isinstance(value, Decimal):
             if isinstance(value, float):
-                dec = self.decimal_places
+                dec = self._decimal_places
                 return Decimal(round(value * (10 ** dec))) / Decimal(10 ** dec)
             return Decimal(value)
         return value
 
 
 class DateTimeField(Field):
-    FIELD_TYPE = 'TIMESTAMP'
+    SQL_TYPE = 'DATETIME'
     FORMATS = ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d')
 
     def adapt(self, value):
@@ -150,46 +146,43 @@ class DateTimeField(Field):
         return value
 
 
-class PrimaryKey(Field):
+class AutoField(Field):
 
-    def __init__(self, **kwargs):
-        kwargs['null'] = True
-        kwargs['unique'] = False
+    def __init__(self, pk=False, null=False, unique=False, default=None, column_name=None):
+        super(AutoField, self).__init__(pk=pk, null=null, unique=unique, default=default, column_name=column_name)
+        self._null = self.is_pk
+        self._unique = False
 
-        super().__init__(**kwargs)
-        self.pk_declaration = kwargs['pk_declaration']
+    def render_sql_type(self):
+        field_type = self.model.db.spec.auto_field_type
+        return field_type
 
-        self._model = kwargs.get('model')
-        self._name = kwargs.get('name')
-
-    def get_field_type(self):
-        return self.pk_declaration
+    def get_field_constrains(self):
+        constrains = super().get_field_constrains()
+        constrains.extend(self.model.db.spec.auto_field_constrains)
+        return constrains
 
 
 class ForeignKey(Field):
-    CASCADE = 'CASCADE'
-    RESTRICT = 'RESTRICT'
-    SET_NULL = 'SET NULL'
-    SET_DEFAULT = 'SET DEFAULT'
 
-    def __init__(self, null=False, unique=False, default=NoVal, column_name=None, **extra_kwargs):
+    def __init__(self, pk=False, null=False, unique=False, default=None, column_name=None, **extra_kwargs):
         ref_model = extra_kwargs.pop('to')
-        on_delete = extra_kwargs.pop('on_delete')
 
         if not column_name:
             column_name = f"{ref_model.table_name}_id"
 
-        super().__init__(null=null, unique=unique, default=default, column_name=column_name, **extra_kwargs)
+        super().__init__(pk=pk, null=null, unique=unique, default=default, column_name=column_name)
         self.to = ref_model
-        self.on_delete = on_delete
 
     def adapt(self, value):
         if isinstance(value, self.to):
             return value.pk
-        return int(value)
+        return self.to.pk_field.adapt(value)
 
     def to_query_parameter(self, value):
         return value.pk if isinstance(value, self.to) else value
 
-    def get_field_type(self):
-        return f'INTEGER REFERENCES {self.to.table_name} ({self.to.PK_FIELD})'
+    def render_sql_type(self):
+        ref_pk_field = self.to.pk_field
+        fk_type = 'INTEGER' if isinstance(ref_pk_field, AutoField) else ref_pk_field.render_sql_type()
+        return f'{fk_type} REFERENCES {self.to.table_name} ({ref_pk_field.name})'

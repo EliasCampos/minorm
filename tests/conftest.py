@@ -1,14 +1,14 @@
 import pytest
 
-from minorm.db import SQLiteDatabase
+from minorm.connectors import connector
 from minorm.fields import CharField, IntegerField, ForeignKey
 from minorm.models import Model
+from minorm.specs import SQLiteSpec
 
 
 @pytest.fixture(scope="function")
 def test_db():
-    db = SQLiteDatabase(":memory:")
-    db.connect()
+    db = connector.connect(SQLiteSpec(":memory:"))
     yield db
     db.disconnect()
 
@@ -31,7 +31,7 @@ def test_model(test_db):
 def related_models(test_model):
     class Book(Model):
         title = CharField(max_length=120)
-        author = ForeignKey(to=test_model, on_delete=ForeignKey.CASCADE)
+        author = ForeignKey(to=test_model)
 
         class Meta:
             db = test_model.db

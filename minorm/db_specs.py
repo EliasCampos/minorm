@@ -47,11 +47,6 @@ class SQLiteSpec(BaseSpec):
 
         return sqlite3
 
-    def create_connection(self):
-        connection = super().create_connection()
-        connection.row_factory = self.db_driver.Row
-        return connection
-
 
 class PostgreSQLSpec(BaseSpec):
     VALUE_ESCAPE = '%s'
@@ -60,5 +55,4 @@ class PostgreSQLSpec(BaseSpec):
 
     def prepare_db_driver(self):
         import psycopg2
-
         return psycopg2

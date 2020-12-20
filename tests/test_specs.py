@@ -1,6 +1,6 @@
 import sqlite3
 
-from minorm.specs import SQLiteSpec
+from minorm.db_specs import SQLiteSpec
 
 
 class TestSQLiteSpec:
@@ -14,7 +14,6 @@ class TestSQLiteSpec:
         db_spec = SQLiteSpec(":memory:")
         conn = db_spec.create_connection()
         assert isinstance(conn, sqlite3.Connection)
-        assert conn.row_factory is sqlite3.Row
 
     def test_value_escape(self):
         db_spec = SQLiteSpec("")

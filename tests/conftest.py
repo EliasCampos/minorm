@@ -1,9 +1,9 @@
 import pytest
 
 from minorm.connectors import connector
+from minorm.db_specs import SQLiteSpec
 from minorm.fields import CharField, IntegerField, ForeignKey
 from minorm.models import Model
-from minorm.specs import SQLiteSpec
 
 
 @pytest.fixture(scope="function")

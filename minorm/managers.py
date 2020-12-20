@@ -108,7 +108,7 @@ class QuerySet:
             return self
 
         for value in args:
-            val_parts = value.split('__')
+            val_parts = value.split('__', 1)
             if len(val_parts) > 1:
                 rel = val_parts[0]
                 rel_field_name = val_parts[1]
@@ -147,7 +147,7 @@ class QuerySet:
     def query(self):
         joins = [JoinExpression.on_pk(fld.to.table_name, fld.query_name, fld.to.pk_field.query_name)
                  for fld in self._related.values()]
-        query = (SelectQuery(table_name=self.model.table_name, fields=self._get_fields())
+        query = (SelectQuery(table_name=self.model.table_name, fields=self._get_all_fields())
                  .join(joins)
                  .where(self._where)
                  .limit(self._limit)
@@ -203,9 +203,6 @@ class QuerySet:
             results = curr.fetchall()
         return results
 
-    def _dict_from_row(self, row):
-        return {val: row[f'{field.model.name}_{field.name}'] for val, field in self._values_mapping.items()}
-
     def _check_pk_lookups(self, kwargs):
         conds = []
         lookups = set()
@@ -231,29 +228,29 @@ class QuerySet:
         return instance
 
     def _instance_from_row(self, row, model, related=(), is_tuple=True):
-        kwargs = {}
-        for field in model.fields:
-            attr_name = field.name
-            field_lookup = f'{model.name}_{attr_name}'
-            base_value = row[field_lookup]
+        attr_names = [field.name for field in model.fields]
+        kwargs = dict(zip(attr_names, row))
 
-            if base_value and related and isinstance(field, ForeignKey) and field.to in related:
-                value = self._instance_from_row(row, field.to, related=None, is_tuple=is_tuple)
-            else:
-                value = base_value
+        if related:
+            row_shift = len(attr_names)
+            for rel_model in related:  # TODO: related instance inside related instance
+                rel_instance = self._instance_from_row(row[row_shift:], rel_model, related=(), is_tuple=is_tuple)
+                rel_attr_name = next(
+                    (field.name for field in model.fields if isinstance(field, ForeignKey) and field.to is rel_model)
+                )
+                kwargs[rel_attr_name] = rel_instance
+                row_shift += len(rel_model.fields)
 
-            kwargs[attr_name] = value
-
-        if is_tuple:
-            return model.query_namedtuple(**kwargs)
-
-        result = model(**kwargs)
+        result = model.query_namedtuple(**kwargs) if is_tuple else model(**kwargs)
         return result
 
-    def _get_fields(self):
+    def _dict_from_row(self, row):
+        return dict(zip(self._values_mapping, row))
+
+    def _get_all_fields(self):
         if self._values_mapping:
-            field_seq = [field.select_field_name for field in self._values_mapping.values()]
+            field_seq = [field.query_name for field in self._values_mapping.values()]
         else:
-            all_models = (self.model, ) + tuple(self._related)
-            field_seq = chain.from_iterable(mdl.select_field_names for mdl in all_models)
+            all_models = (self.model,) + tuple(self._related)
+            field_seq = chain.from_iterable(model.query_names for model in all_models)
         return tuple(field_seq)

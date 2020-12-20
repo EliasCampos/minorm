@@ -88,8 +88,8 @@ class ModelMetaclass(type):
         return [field.column_name for field in cls.fields]
 
     @property
-    def select_field_names(cls):
-        return [field.select_field_name for field in cls.fields]
+    def query_names(cls):
+        return [field.query_name for field in cls.fields]
 
     def to_sql(cls):
         field_params = [field.render_sql() for field in cls.fields]
@@ -158,14 +158,13 @@ class Model(metaclass=ModelMetaclass):
 
         model = self.__class__
 
-        pk_cond = WhereCondition(model.pk_field.column_name, WhereCondition.EQ, self.pk)
-        fields = [field.column_name for field in model.fields]
-        select_query = SelectQuery(table_name=model.table_name, fields=fields, where=pk_cond)
+        pk_cond = WhereCondition(model.pk_field.query_name, WhereCondition.EQ, self.pk)
+        query_fields = [field.query_name for field in model.fields]
+        select_query = SelectQuery(table_name=model.table_name, fields=query_fields, where=pk_cond)
         raw_sql = select_query.render_sql(model.db.spec)
         params = pk_cond.values()
         with model.db.cursor() as curr:
             curr.execute(raw_sql, params)
             row = curr.fetchone()
-        for field in model.fields:
-            value = row[field.column_name]
-            setattr(self, field.name, value)
+        for i, field in enumerate(model.fields):
+            setattr(self, field.name, row[i])

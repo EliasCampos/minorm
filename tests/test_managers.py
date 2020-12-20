@@ -184,11 +184,11 @@ class TestQueryExpression:
             c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('y', 1))
 
         qs = model_with_fk.qs
-        related_query = qs.select_related('author')
+        related_qs = qs.select_related('author')
 
-        assert related_query is qs
+        assert related_qs is qs
 
-        result = related_query.get(id=1)
+        result = related_qs.get(id=1)
 
         assert result.pk == 1
         assert result.author.pk == 1
@@ -258,6 +258,26 @@ class TestQueryExpression:
         assert result[2]["id"] == 3
         assert result[2]["name"] == 'z'
         assert "age" not in result[2]
+
+    def test_values_select_related(self, related_models):
+        model_with_fk, external_model = related_models
+
+        db = external_model.db
+        with db.cursor() as c:
+            c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('foo', 18), ('bar', 19)])
+            c.executemany('INSERT INTO book (title, person_id) VALUES (?, ?);', [('a', 1), ('b', 2), ('c', 1)])
+
+        result = model_with_fk.qs.select_related('author').values('title', 'author__name').all()
+        assert result[0]["title"] == 'a'
+        assert result[0]["author__name"] == 'foo'
+        assert 'id' not in result[0]
+        assert 'author_name' not in result[0]
+
+        assert result[1]["title"] == 'b'
+        assert result[1]["author__name"] == 'bar'
+
+        assert result[2]["title"] == 'c'
+        assert result[2]["author__name"] == 'foo'
 
     def test_exists(self, test_model):
         db = test_model.db

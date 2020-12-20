@@ -1,7 +1,7 @@
 import pytest
 
 from minorm.connectors import Connector, ConnectorError
-from minorm.specs import SQLiteSpec
+from minorm.db_specs import SQLiteSpec
 
 
 class TestConnector:

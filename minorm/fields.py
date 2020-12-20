@@ -79,10 +79,6 @@ class Field:
     def query_name(self):
         return f'{self.model.table_name}.{self.column_name}'
 
-    @property
-    def select_field_name(self):
-        return f'{self.query_name} AS {self.model.name}_{self.name}'
-
 
 class IntegerField(Field):
     SQL_TYPE = 'INTEGER'

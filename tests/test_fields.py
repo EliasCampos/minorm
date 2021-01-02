@@ -2,7 +2,9 @@ import pytest
 from decimal import Decimal
 from datetime import datetime
 
-from minorm.fields import Field, AutoField, CharField, DecimalField, DateTimeField, ForeignKey, IntegerField
+from minorm.fields import (
+    Field, AutoField, BooleanField, CharField, DecimalField, DateTimeField, ForeignKey, IntegerField,
+)
 
 
 class TestField:
@@ -28,6 +30,13 @@ class TestIntegerField:
     def test_render_sql_type(self):
         int_field = IntegerField()
         assert int_field.render_sql_type() == 'INTEGER'
+
+
+class TestBooleanField:
+
+    def test_render_sql_type(self):
+        bool_field = BooleanField()
+        assert bool_field.render_sql_type() == 'BOOLEAN'
 
 
 class TestCharField:

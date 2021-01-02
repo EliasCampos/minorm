@@ -146,6 +146,14 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
         filtered_qs = Person.qs.filter(user_type='member', age__gt=18)
         result = filtered_qs.all()  # hits db, performs select query
 
+    List of supported lookup expressions:
+
+    - :code:`lt`, :code:`lte` - less than (or equal)
+    - :code:`gt`, :code:`gte` - greater than (or equal)
+    - :code:`neq` - not equal
+    - :code:`in` - checks if value is between given options
+    - :code:`startswith`, :code:`endswith`, :code:`contains` - check inclusion of a string
+
 :code:`aswell(**lookups)`:
     Make query result to include items that also matches lookups listed in the method:
 

@@ -7,8 +7,11 @@
 # Virtual environment:
 .venv/
 
-# eggs:
-MinORM.egg-info/*
+# Distribution / packaging:
+build/
+dist/
+minorm.egg-info/*
+MANIFEST
 
 # tox:
 .tox/

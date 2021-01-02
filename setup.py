@@ -1,32 +1,28 @@
-from distutils.core import setup
-from os import path
+from pathlib import Path
+from setuptools import setup
 
 
 def get_version(root_path):
-    with open(path.join(root_path, 'minorm', '__init__.py')) as f:
+    version_file = root_path / 'minorm' / '__init__.py'
+    with version_file.open() as f:
         for line in f:
             if line.startswith('__version__'):
                 return line.split('=')[1].strip().strip('"').strip("'")
 
 
-def get_long_description(root_path):
-    with open(path.join(root_path, 'README.rst')) as f:
-        return f.read()
-
-
-ROOT_PATH = path.dirname(path.abspath(__file__))
-
+ROOT_PATH = Path(__file__).parent
+README = ROOT_PATH / 'README.rst'
 
 setup(
-    name='MinORM',
+    name='minorm',
     version=get_version(ROOT_PATH),
-    license="MIT",
     description='A minimalistic ORM with basic features.',
-    long_description=get_long_description(ROOT_PATH),
+    long_description=README.read_text(),
+    long_description_content_type='text/x-rst',
+    url='https://github.com/EliasCampos/minorm',
     author='Campos Ilya',
     author_email='camposylia@gmail.com',
-    url='https://github.com/EliasCampos/minorm',
-    packages=['minorm'],
+    license="MIT",
     classifiers=[
         'Development Status :: 1 - Planning',
         'Intended Audience :: Developers',
@@ -37,4 +33,5 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
     ],
+    packages=['minorm'],
 )

@@ -1,0 +1,179 @@
+from datetime import datetime
+import sys
+
+from minorm.connectors import connector
+from minorm.db_specs import SQLiteSpec
+from minorm.fields import BooleanField, CharField, DateTimeField
+from minorm.models import Model
+
+
+class TodoItem(Model):
+    title = CharField(max_length=120)
+    created_at = DateTimeField(default=datetime.now)
+    is_done = BooleanField(default=False)
+
+
+def main():
+    connector.connect(SQLiteSpec('todos.db'))
+    init_tables()
+
+    print_description()
+
+    commands_with_params = {
+        'search': search_items,
+        'add': add_item,
+        'edit': edit_item,
+        'complete': complete_item,
+        'remove': remove_item,
+    }
+    singles_commands = {
+        'list': list_items,
+        'clean': clean_items,
+        'help': print_description,
+    }
+
+    while True:
+        try:
+            command = input("$")
+        except KeyboardInterrupt:
+            print('\nExiting...')
+            connector.disconnect()
+            return
+
+        command_args = command.strip().split(maxsplit=1)
+        if not command_args:
+            continue
+
+        command_name = command_args[0]
+        if len(command_args) == 2:
+            try:
+                handler = commands_with_params[command_name]
+            except KeyError:
+                print("Unsupported command. Use 'help' to list available commands.")
+            else:
+                parameter = command_args[1]
+                handler(parameter)
+        else:
+            try:
+                handler = singles_commands[command_name]
+            except KeyError:
+                print("Unsupported command. Use 'help' to list available commands.")
+            else:
+                handler()
+
+
+def add_item(title):
+    if TodoItem.qs.filter(title=title).exists():
+        print("WARNING: duplicated one or more items with the title.")
+
+    new_item = TodoItem.qs.create(title=title)
+    print("Added new item:", new_item.pk, new_item.title)
+
+
+def list_items():
+    if not TodoItem.qs.exists():
+        print("No todos yet.")
+    else:
+        _display_items_list(qs=TodoItem.qs)
+
+
+def search_items(title):
+    if not TodoItem.qs.filter(title__contains=title).exists():
+        print("No todos found.")
+    else:
+        print("Found next todos:")
+        _display_items_list(qs=TodoItem.qs.filter(title__contains=title))
+
+
+def edit_item(params):
+    param_parts = params.split(maxsplit=1)
+    if len(param_parts) < 2:
+        print("Missing a title.")
+        return
+
+    item = _get_by_id(param_parts[0])
+    if item:
+        item.title = param_parts[1]
+        item.save()
+        print('Modified:', item.pk, item.title)
+
+
+def complete_item(item_id):
+    item = _get_by_id(item_id)
+    if item:
+        item.is_done = True
+        item.save()
+        print('DONE:', item.title)
+
+
+def remove_item(item_id):
+    item = _get_by_id(item_id)
+    if item:
+        item.delete()
+        print(f"Item removed!")
+
+
+def clean_items():
+    TodoItem.qs.filter(is_done=True).delete()
+    print("Removed done todos.")
+
+
+def print_description():
+    description = """
+    TODO application.
+
+    Commands:
+
+    * list - List all todos
+
+    * search [title] - Search a todo by title
+
+    * add [title] - Add a new todo
+
+    * edit [id] [title] - Change a title of the todo
+
+    * complete [id] - Mark the todo as done
+
+    * remove [id] - Remove the todo with specified ID
+    
+    * clean - Remove all done todos
+    
+    * help - Display help
+    """
+
+    print(description.lstrip())
+
+
+def _get_by_id(lookup_value):
+    try:
+        item_id = int(lookup_value)
+    except ValueError:
+        print("ID should be a number")
+        return None
+
+    try:
+        item = TodoItem.qs.get(id=item_id)
+    except TodoItem.DoesNotExists:
+        print(f"Item with id {item_id} does not exists.")
+        return None
+
+    return item
+
+
+def _display_items_list(qs):
+    print(" | ".join(("ID", "Created at", "Title")))
+    for item in qs.all():
+        created_at = datetime.strptime(item.created_at, '%Y-%m-%d %H:%M:%S.%f').strftime("%Y-%m-%d %H:%M")
+        title = f'[DONE] {item.title}' if item.is_done else item.title
+        print(' | '.join((str(item.id), created_at, title)))
+
+
+def init_tables():
+    create_sql = TodoItem.render_sql()
+    created_in_no_sql = create_sql.replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS')
+    with connector.cursor() as curr:
+        curr.execute(created_in_no_sql)
+
+
+if __name__ == '__main__':
+    main()

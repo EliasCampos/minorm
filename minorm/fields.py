@@ -85,6 +85,11 @@ class IntegerField(Field):
     adapt = int
 
 
+class BooleanField(Field):
+    SQL_TYPE = 'BOOLEAN'
+    adapt = bool
+
+
 class CharField(Field):
 
     def __init__(self, pk=False, null=False, unique=False, default=None, column_name=None, **extra_kwargs):

@@ -103,15 +103,16 @@ class WhereCondition:
 
     @classmethod
     def for_lookup(cls, field_name, lookup, value):
-        like_patterns = dict(cls.LIKE_PATTERNS)
-        if lookup in like_patterns:
-            value = like_patterns[lookup].format(value)
-
-        lookup_mapping = dict(cls.LOOKUP_MAPPING)
         if lookup is None:
             op = cls.EQ
         else:
+            lookup_mapping = dict(cls.LOOKUP_MAPPING)
             op = lookup_mapping[lookup]
+
+        if op == cls.LIKE:
+            like_patterns = dict(cls.LIKE_PATTERNS)
+            value = like_patterns[lookup].format(value)
+
         return cls(field=field_name, op=op, value=value)
 
 

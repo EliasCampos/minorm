@@ -173,11 +173,11 @@ class QuerySet:
         where_conds.extend(args)
 
         for key, value in kwargs.items():
-            field_name, op = WhereCondition.resolve_lookup(key)
+            field_name, lookup = WhereCondition.resolve_lookup(key)
             field = self.model.check_field(field_name, with_pk=True)
             adopted_value = field.to_query_parameter(value)
 
-            where_cond = WhereCondition(field.query_name, op, adopted_value)
+            where_cond = WhereCondition.for_lookup(field.query_name, lookup, adopted_value)
             where_conds.append(where_cond)
 
         result = functools.reduce(operator.and_, where_conds) if where_conds else None
@@ -212,8 +212,8 @@ class QuerySet:
             if not key.startswith(pk_prefix):
                 continue
 
-            _, op = WhereCondition.resolve_lookup(key)
-            where_cond = WhereCondition(self.model.pk_field.query_name, op, value)
+            _, lookup = WhereCondition.resolve_lookup(key)
+            where_cond = WhereCondition.for_lookup(self.model.pk_field.query_name, lookup, value)
             conds.append(where_cond)
             lookups.add(key)
 

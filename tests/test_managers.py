@@ -6,7 +6,7 @@ from minorm.managers import QuerySet, OrderByExpression
 
 class TestQueryExpression:
 
-    def test_filter(self, test_model):
+    def test_filter_query(self, test_model):
         query = QuerySet(model=test_model)
 
         result = query.filter(name='x', age__gt=2)
@@ -14,6 +14,27 @@ class TestQueryExpression:
         assert result is query
         assert str(result._where) == "person.name = {0} AND person.age > {0}"
         assert result._where.values() == ('x', 2)
+
+    def test_filter_contains_query(self, test_model):
+        query = QuerySet(model=test_model)
+
+        result = query.filter(name__contains='foo')
+        assert str(result._where) == "person.name LIKE {0}"
+        assert result._where.values() == ('%foo%',)
+
+    def test_filter_startswith_query(self, test_model):
+        query = QuerySet(model=test_model)
+
+        result = query.filter(name__startswith='bar')
+        assert str(result._where) == "person.name LIKE {0}"
+        assert result._where.values() == ('bar%',)
+
+    def test_filter_endswith_query(self, test_model):
+        query = QuerySet(model=test_model)
+
+        result = query.filter(name__endswith='baz')
+        assert str(result._where) == "person.name LIKE {0}"
+        assert result._where.values() == ('%baz',)
 
     def test_aswell(self, test_model):
         query = QuerySet(model=test_model)

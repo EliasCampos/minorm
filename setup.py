@@ -24,7 +24,7 @@ setup(
     author_email='camposylia@gmail.com',
     license="MIT",
     classifiers=[
-        'Development Status :: 1 - Planning',
+        'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',

@@ -169,9 +169,9 @@ def _display_items_list(qs):
 
 def init_tables():
     create_sql = TodoItem.render_sql()
-    created_if_required_sql = create_sql.replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS')
+    create_if_required_sql = create_sql.replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS')
     with connector.cursor() as curr:
-        curr.execute(created_if_required_sql)
+        curr.execute(create_if_required_sql)
 
 
 if __name__ == '__main__':

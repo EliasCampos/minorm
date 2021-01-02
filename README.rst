@@ -114,108 +114,120 @@ Pass an instance of related model when saving a new one:
 
 Queryset methods
 ****************
-Use queryset, accessible by model's :code:`qs` property, to perform db queries:
+Use queryset, accessible by model's :code:`qs` property, to perform db operations on multiple rows:
 
-:code:`all()`: Get all rows as a list of namedtuple objects:
+:code:`all()`:
+    Get all rows as a list of namedtuple objects:
 
-.. code:: python
+    .. code:: python
 
-    persons = Person.qs.all()  # list of namedtuples
+        persons = Person.qs.all()  # list of namedtuples
 
-it's possible to limit number of selected rows by using slices:
+    it's possible to limit number of selected rows by using slices:
 
-.. code:: python
+    .. code:: python
 
-    persons = Person.qs[:3].all()  # list with only three items
+        persons = Person.qs[:3].all()  # list with only three items
 
-:code:`values(*fields)`: Prepare qs to get rows as dictionaries with fields, passed to the method:
+:code:`values(*fields)`:
+    Prepare qs to get rows as dictionaries with fields, passed to the method:
 
-.. code:: python
+    .. code:: python
 
-    values_qs = Book.qs.values('title', 'author__name')  # dicts with this two keys
-    books = values_qs.all()  # this method call will actually hit db, not previous
+        values_qs = Book.qs.values('title', 'author__name')  # dicts with this two keys
+        books = values_qs.all()  # this method call will actually hit db, not previous
 
-:code:`filter(**lookups)`: Filter query, result will contain only items that matches all lookups:
+:code:`filter(**lookups)`:
+    Filter query, result will contain only items that matches all lookups:
 
-.. code:: python
+    .. code:: python
 
-    # user type is "member" AND age > 18
-    filtered_qs = Person.qs.filter(user_type='member', age__gt=18)
-    result = filtered_qs.all()  # hits db, performs select query
+        # user type is "member" AND age > 18
+        filtered_qs = Person.qs.filter(user_type='member', age__gt=18)
+        result = filtered_qs.all()  # hits db, performs select query
 
-:code:`aswell(**lookups)`: Make query result to include items that also matches lookups listed in the method:
+:code:`aswell(**lookups)`:
+    Make query result to include items that also matches lookups listed in the method:
 
-.. code:: python
+    .. code:: python
 
-    # age > 18 OR user is admin
-    filtered_qs = Person.qs.filter(age__gt=18).aswell(user_type="admin")
+        # age > 18 OR user is admin
+        filtered_qs = Person.qs.filter(age__gt=18).aswell(user_type="admin")
 
-:code:`order_by(*fields)`: Set ordering of queried rows. Use :code:`-` prefix to reverse order:
+:code:`order_by(*fields)`:
+    Set ordering of queried rows. Use :code:`-` prefix to reverse order:
 
-.. code:: python
+    .. code:: python
 
-    Book.qs.order_by('created')  # for oldest to newest
-    Person.qs.order_by('-id')  # reverse ordering by id
+        Book.qs.order_by('created')  # for oldest to newest
+        Person.qs.order_by('-id')  # reverse ordering by id
 
-:code:`exists()`: Return boolean, that indicates presence of rows that match filters:
+:code:`exists()`:
+    Return boolean, that indicates presence of rows that match filters:
 
-.. code:: python
+    .. code:: python
 
-    Person.qs.filter(name="mike").exists()  # True if there is such name, otherwise False
+        Person.qs.filter(name="mike").exists()  # True if there is such name, otherwise False
 
-:code:`get()`: Get single row as an instance of the class:
+:code:`get(**lookups)`:
+    Get single row as an instance of the model class:
 
-.. code:: python
+    .. code:: python
 
-    person = Person.qs.filter(id=7).get()  # model instance object
+        person = Person.qs.get(id=7)  # model instance object
 
-raises :code:`Model.DoesNotExists` if corresponding row not found in db,
-and :code:`MultipleQueryResult` if more than one row matches query filters.
+    raises :code:`Model.DoesNotExists` if corresponding row not found in db,
+    and :code:`MultipleQueryResult` if more than one row matches query filters.
 
-:code:`create(**field_values)`: Create a new instance in db:
+:code:`create(**field_values)`:
+    Create a new instance in db:
 
-.. code:: python
+    .. code:: python
 
-    person = Person.qs.create(name="John", age=33)
+        person = Person.qs.create(name="John", age=33)
 
-is a shortcut for two calls:
+    is a shortcut for two calls:
 
-.. code:: python
+    .. code:: python
 
-    person = Person(name="John", age=33)
-    person.save()
+        person = Person(name="John", age=33)
+        person.save()
 
-:code:`update(**field_values)`: Update field values of existing rows in db:
+:code:`update(**field_values)`:
+    Update field values of existing rows in db:
 
-.. code:: python
+    .. code:: python
 
-    Book.qs.filter(price__lt=200).update(price=250)
-
-
-:code:`delete()`: Remove filtered rows from db:
-
-.. code:: python
-
-    Product.qs.filter(created__lt=date(2020, 11, 10)).delete()
-
-:code:`bulk_create(instances)`: Create multiple instances in one db query:
-
-.. code:: python
-
-    Book.qs.bulk_create([
-        Book(title="foo", author=1),
-        Book(title="bar", author=2),
-        Book(title="baz", author=1),
-    ])  # creates all these books in one query
+        Book.qs.filter(price__lt=200).update(price=250)
 
 
-:code:`select_related(*fk_fields)`: Prepare queryset to perform select query with join of foreign relation:
+:code:`delete()`:
+    Remove all rows of queryset from db:
 
-.. code:: python
+    .. code:: python
 
-    for book in Book.qs.select_related('author').all():
-        author = book.author  # without select_related call, author attribute is fk ID
-        print(book.title, author.name)
+        Product.qs.filter(created__lt=date(2020, 11, 10)).delete()
+
+:code:`bulk_create(instances)`:
+    Create multiple instances in one db query:
+
+    .. code:: python
+
+        Book.qs.bulk_create([
+            Book(title="foo", author=1),
+            Book(title="bar", author=2),
+            Book(title="baz", author=1),
+        ])  # creates all these books in one query
+
+
+:code:`select_related(*fk_fields)`:
+    Prepare queryset to perform select query with join of foreign relation:
+
+    .. code:: python
+
+        for book in Book.qs.select_related('author').all():
+            author = book.author  # without select_related call, author attribute is fk ID
+            print(book.title, author.name)
 
 TODO
 ----

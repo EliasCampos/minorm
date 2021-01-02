@@ -1,5 +1,4 @@
 from datetime import datetime
-import sys
 
 from minorm.connectors import connector
 from minorm.db_specs import SQLiteSpec
@@ -74,7 +73,7 @@ def list_items():
     if not TodoItem.qs.exists():
         print("No todos yet.")
     else:
-        _display_items_list(qs=TodoItem.qs)
+        _display_items_list(qs=TodoItem.qs.order_by('created_at'))
 
 
 def search_items(title):
@@ -170,9 +169,9 @@ def _display_items_list(qs):
 
 def init_tables():
     create_sql = TodoItem.render_sql()
-    created_in_no_sql = create_sql.replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS')
+    created_if_required_sql = create_sql.replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS')
     with connector.cursor() as curr:
-        curr.execute(created_in_no_sql)
+        curr.execute(created_if_required_sql)
 
 
 if __name__ == '__main__':

@@ -140,6 +140,29 @@ class TestModel:
         assert instance.pk == 1
         assert instance.age == 42
 
+    def test_save_update(self, test_model):
+        prev_instance = test_model(name="john", age=33)
+        prev_instance.save()
+
+        new_instance = test_model(name="steven", age=19)
+        new_instance.save()
+
+        new_instance.age = 20
+        new_instance.save()
+
+        select_previous_query = "SELECT name, age FROM person ORDER BY id"
+        with test_model.db.cursor() as curr:
+            curr.execute(select_previous_query)
+            result = curr.fetchall()
+
+        old_row = result[0]
+        assert old_row[0] == 'john'
+        assert old_row[1] == 33
+
+        new_row = result[1]
+        assert new_row[0] == 'steven'
+        assert new_row[1] == 20
+
     def test_save_with_fk(self, related_models):
         model_with_fk, external_model = related_models
 

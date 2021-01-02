@@ -136,13 +136,20 @@ class Model(metaclass=ModelMetaclass):
         modified_fields = [field for field in model.fields if not isinstance(field, AutoField)]
         if is_creation:
             query_class = InsertQuery
+            where_cond = None
         else:
             query_class = UpdateQuery
-        query = query_class(table_name=model.table_name, fields=[field.column_name for field in modified_fields])
+            where_cond = WhereCondition(model.pk_field.query_name, WhereCondition.EQ, self.pk)
+
+        query = query_class(
+            table_name=model.table_name, fields=[field.column_name for field in modified_fields], where=where_cond,
+        )
         raw_sql = query.render_sql(model.db.spec)
-        params = [getattr(self, field.name) for field in modified_fields]
+        query_params = [getattr(self, field.name) for field in modified_fields]
+        if where_cond:
+            query_params.extend(where_cond.values())
         with model.db.cursor() as curr:
-            curr.execute(raw_sql, params)
+            curr.execute(raw_sql, query_params)
         if is_creation:
             setattr(self, model.pk_field.name, curr.lastrowid)
 

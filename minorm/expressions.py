@@ -2,23 +2,34 @@ from collections import namedtuple
 
 
 class WhereCondition:
+    AND = 'AND'
+    OR = 'OR'
+    NOT = 'NOT'
+
+    EQ = '='
+
+    IN = 'IN'
+    LIKE = 'LIKE'
+
     LOOKUP_MAPPING = (
         ('lt', '<'),
         ('lte', '<='),
         ('gt', '>'),
         ('gte', '>='),
-        ('in', 'IN'),
+        ('in', IN),
         ('neq', '!='),
+        ('startswith', LIKE),
+        ('endswith', LIKE),
+        ('contains', LIKE),
     )
 
-    MULTIPLE_VALUE_OPS = ('IN', )
+    LIKE_PATTERNS = (
+        ('startswith', '{0}%'),
+        ('endswith', '%{0}'),
+        ('contains', '%{0}%')
+    )
 
-    AND = 'AND'
-    OR = 'OR'
-
-    NOT = 'NOT'
-
-    EQ = '='
+    MULTIPLE_VALUE_OPS = (IN, )
 
     def __init__(self, field, op, value, no_escape=False):
         self.field = field
@@ -84,11 +95,25 @@ class WhereCondition:
             lookups = dict(cls.LOOKUP_MAPPING)
             if parts[1] not in lookups:
                 raise ValueError(f'Invalid lookup expression: {parts[1]}')
-            lookup = lookups[parts[1]]
+            lookup = parts[1]
         else:
-            lookup = cls.EQ
+            lookup = None
 
         return field, lookup
+
+    @classmethod
+    def for_lookup(cls, field_name, lookup, value):
+        if lookup is None:
+            op = cls.EQ
+        else:
+            lookup_mapping = dict(cls.LOOKUP_MAPPING)
+            op = lookup_mapping[lookup]
+
+        if op == cls.LIKE:
+            like_patterns = dict(cls.LIKE_PATTERNS)
+            value = like_patterns[lookup].format(value)
+
+        return cls(field=field_name, op=op, value=value)
 
 
 class OrderByExpression(namedtuple('OrderByExpression', 'value, ordering')):

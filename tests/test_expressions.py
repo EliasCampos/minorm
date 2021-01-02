@@ -58,23 +58,14 @@ class TestWhereCondition:
         assert str(not_and) == "NOT (x = {0} AND y = {0})"
         assert not_and.values() == ('3', '5')
 
-    @pytest.mark.parametrize(
-        'lookup, expected_op', [
-            ('lt', '<'),
-            ('lte', '<='),
-            ('gt', '>'),
-            ('gte', '>='),
-            ('in', 'IN'),
-            ('neq', '!='),
-        ]
-    )
-    def test_resolve_lookup(self, lookup, expected_op):
+    @pytest.mark.parametrize('lookup', ['lt', 'lte', 'gt',  'gte', 'in', 'neq'])
+    def test_resolve_lookup(self, lookup):
         field = f'test__{lookup}'
-        assert WhereCondition.resolve_lookup(field) == ('test', expected_op)
+        assert WhereCondition.resolve_lookup(field) == ('test', lookup)
 
     def test_resolve_lookup_eq(self):
         field = f'test'
-        assert WhereCondition.resolve_lookup(field) == ('test', '=')
+        assert WhereCondition.resolve_lookup(field) == ('test', None)
 
     def test_resolve_lookup_value_error(self):
         invalid_lookup = 'foobar'

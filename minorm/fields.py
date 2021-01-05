@@ -77,7 +77,7 @@ class Field:
 
     @property
     def query_name(self):
-        return f'{self.model.table_name}.{self.column_name}'
+        return f'{self.model._meta.table_name}.{self.column_name}'
 
 
 class IntegerField(Field):
@@ -155,12 +155,12 @@ class AutoField(Field):
         self._unique = False
 
     def render_sql_type(self):
-        field_type = self.model.db.spec.auto_field_type
+        field_type = self.model._meta.db.spec.auto_field_type
         return field_type
 
     def get_field_constrains(self):
         constrains = super().get_field_constrains()
-        constrains.extend(self.model.db.spec.auto_field_constrains)
+        constrains.extend(self.model._meta.db.spec.auto_field_constrains)
         return constrains
 
 
@@ -168,7 +168,7 @@ class ForeignKey(Field):
 
     def __init__(self, to, pk=False, null=False, unique=False, default=None, column_name=None):
         if not column_name:
-            column_name = f"{to.table_name}_id"
+            column_name = f"{to._meta.table_name}_id"
 
         super().__init__(pk=pk, null=null, unique=unique, default=default, column_name=column_name)
         self.to = to
@@ -176,12 +176,12 @@ class ForeignKey(Field):
     def adapt(self, value):
         if isinstance(value, self.to):
             return value.pk
-        return self.to.pk_field.adapt(value)
+        return self.to._meta.pk_field.adapt(value)
 
     def to_query_parameter(self, value):
         return value.pk if isinstance(value, self.to) else value
 
     def render_sql_type(self):
-        ref_pk_field = self.to.pk_field
+        ref_pk_field = self.to._meta.pk_field
         fk_type = 'INTEGER' if isinstance(ref_pk_field, AutoField) else ref_pk_field.render_sql_type()
-        return f'{fk_type} REFERENCES {self.to.table_name} ({ref_pk_field.name})'
+        return f'{fk_type} REFERENCES {self.to._meta.table_name} ({ref_pk_field.name})'

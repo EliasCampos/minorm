@@ -34,7 +34,7 @@ class QuerySet:
     def order_by(self, *args):
         for field_name in args:
             order_exp = OrderByExpression.from_field_name(field_name)
-            field = self.model.check_field(order_exp.value, with_pk=True)
+            field = self.model._meta.check_field(order_exp.value, with_pk=True)
             self._order_by.add(OrderByExpression(value=field.query_name, ordering=order_exp.ordering))
         return self
 
@@ -44,7 +44,7 @@ class QuerySet:
             return self
 
         for field_name in args:
-            field = self.model.check_field(field_name, with_pk=True)
+            field = self.model._meta.check_field(field_name, with_pk=True)
             if isinstance(field, ForeignKey):  # TODO: multiple tables in one join
                 self._related[field.to] = field
 
@@ -53,22 +53,26 @@ class QuerySet:
     def update(self, **kwargs):
         update_data = OrderedDict()
         for key, value in kwargs.items():
-            field = self.model.check_field(key, with_pk=False)
+            field = self.model._meta.check_field(key, with_pk=False)
             adopted_value = field.adapt_value(value)
             update_data[field.column_name] = adopted_value
 
-        update_query = UpdateQuery(table_name=self.model.table_name, fields=update_data.keys(), where=self._where)
-        raw_sql = update_query.render_sql(self.model.db.spec)
+        update_query = UpdateQuery(
+            table_name=self.model._meta.table_name,
+            fields=update_data.keys(),
+            where=self._where,
+        )
+        raw_sql = update_query.render_sql(self.model._meta.db.spec)
         params = tuple(update_data.values()) + (self._where.values() if self._where else ())
-        with self.model.db.cursor() as curr:
+        with self.model._meta.db.cursor() as curr:
             curr.execute(raw_sql, params)
         return curr.rowcount
 
     def delete(self):
-        delete_query = DeleteQuery(table_name=self.model.table_name, where=self._where)
-        raw_sql = delete_query.render_sql(self.model.db.spec)
+        delete_query = DeleteQuery(table_name=self.model._meta.table_name, where=self._where)
+        raw_sql = delete_query.render_sql(self.model._meta.db.spec)
 
-        with self.model.db.cursor() as curr:
+        with self.model._meta.db.cursor() as curr:
             curr.execute(raw_sql, self.query_params)
         return curr.rowcount
 
@@ -114,21 +118,21 @@ class QuerySet:
                 rel_field_name = val_parts[1]
                 for fk in self._related.values():
                     if rel == fk.name:
-                        rel_field = fk.to.check_field(rel_field_name, with_pk=True)
+                        rel_field = fk.to._meta.check_field(rel_field_name, with_pk=True)
                         self._values_mapping[value] = rel_field
                         break
                 else:
                     raise ValueError(f'{rel} does not belong supported relations.')
             else:
                 val = val_parts[0]
-                field = self.model.check_field(val, with_pk=True)
+                field = self.model._meta.check_field(val, with_pk=True)
                 self._values_mapping[val] = field
 
         return self
 
     def exists(self):
         self.select_related(None)
-        self.values(self.model.pk_field.column_name)
+        self.values(self.model._meta.pk_field.column_name)
         self._limit = 1
 
         is_exists = bool(self._extract())
@@ -136,18 +140,21 @@ class QuerySet:
 
     def bulk_create(self, instances):
         model = self.model
-        insert_query = InsertQuery(table_name=model.table_name, fields=[field.column_name for field in model.fields])
-        raw_sql = insert_query.render_sql(model.db.spec)
-        params = [[getattr(obj, field.name) for field in model.fields] for obj in instances if isinstance(obj, model)]
-        with model.db.cursor() as curr:
+        fields = model._meta.fields
+        db = model._meta.db
+
+        insert_query = InsertQuery(table_name=model._meta.table_name, fields=[field.column_name for field in fields])
+        raw_sql = insert_query.render_sql(db.spec)
+        params = [[getattr(obj, field.name) for field in fields] for obj in instances if isinstance(obj, model)]
+        with db.cursor() as curr:
             curr.executemany(raw_sql, params)
         return curr.rowcount
 
     @property
     def query(self):
-        joins = [JoinExpression.on_pk(fld.to.table_name, fld.query_name, fld.to.pk_field.query_name)
+        joins = [JoinExpression.on_pk(fld.to._meta.table_name, fld.query_name, fld.to._meta.pk_field.query_name)
                  for fld in self._related.values()]
-        query = (SelectQuery(table_name=self.model.table_name, fields=self._get_all_fields())
+        query = (SelectQuery(table_name=self.model._meta.table_name, fields=self._get_all_fields())
                  .join(joins)
                  .where(self._where)
                  .limit(self._limit)
@@ -174,7 +181,7 @@ class QuerySet:
 
         for key, value in kwargs.items():
             field_name, lookup = WhereCondition.resolve_lookup(key)
-            field = self.model.check_field(field_name, with_pk=True)
+            field = self.model._meta.check_field(field_name, with_pk=True)
             adopted_value = field.to_query_parameter(value)
 
             where_cond = WhereCondition.for_lookup(field.query_name, lookup, adopted_value)
@@ -196,9 +203,9 @@ class QuerySet:
         select_query = self.query
         params = self.query_params
 
-        raw_sql = select_query.render_sql(self.model.db.spec)
+        raw_sql = select_query.render_sql(self.model._meta.db.spec)
 
-        with self.model.db.cursor() as curr:
+        with self.model._meta.db.cursor() as curr:
             curr.execute(raw_sql, params)
             results = curr.fetchall()
         return results
@@ -207,13 +214,13 @@ class QuerySet:
         conds = []
         lookups = set()
 
-        pk_prefix = f'{self.model.pk_field.name}__'
+        pk_prefix = f'{self.model._meta.pk_field.name}__'
         for key, value in kwargs.items():
             if not key.startswith(pk_prefix):
                 continue
 
             _, lookup = WhereCondition.resolve_lookup(key)
-            where_cond = WhereCondition.for_lookup(self.model.pk_field.query_name, lookup, value)
+            where_cond = WhereCondition.for_lookup(self.model._meta.pk_field.query_name, lookup, value)
             conds.append(where_cond)
             lookups.add(key)
 
@@ -228,7 +235,9 @@ class QuerySet:
         return instance
 
     def _instance_from_row(self, row, model, related=(), is_tuple=True):
-        attr_names = [field.name for field in model.fields]
+        fields = model._meta.fields
+
+        attr_names = [field.name for field in fields]
         kwargs = dict(zip(attr_names, row))
 
         if related:
@@ -236,10 +245,10 @@ class QuerySet:
             for rel_model in related:  # TODO: related instance inside related instance
                 rel_instance = self._instance_from_row(row[row_shift:], rel_model, related=(), is_tuple=is_tuple)
                 rel_attr_name = next(
-                    (field.name for field in model.fields if isinstance(field, ForeignKey) and field.to is rel_model)
+                    (field.name for field in fields if isinstance(field, ForeignKey) and field.to is rel_model)
                 )
                 kwargs[rel_attr_name] = rel_instance
-                row_shift += len(rel_model.fields)
+                row_shift += len(rel_model._meta.fields)
 
         result = model.query_namedtuple(**kwargs) if is_tuple else model(**kwargs)
         return result
@@ -252,5 +261,5 @@ class QuerySet:
             field_seq = [field.query_name for field in self._values_mapping.values()]
         else:
             all_models = (self.model,) + tuple(self._related)
-            field_seq = chain.from_iterable(model.query_names for model in all_models)
+            field_seq = chain.from_iterable(model._meta.query_names for model in all_models)
         return tuple(field_seq)

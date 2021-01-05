@@ -54,7 +54,7 @@ class TestQueryExpression:
         assert result._order_by == {OrderByExpression('person.age', 'DESC'), OrderByExpression('person.name', 'ASC')}
 
     def test_update(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('John', 19))
 
@@ -66,7 +66,7 @@ class TestQueryExpression:
         assert results[0][1] == 42
 
     def test_update_filter(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 5), ('z', 1)])
 
@@ -80,7 +80,7 @@ class TestQueryExpression:
 
     def test_create(self, test_model):
         test_model.qs.create(name='Vasya', age=19)
-        with test_model.db.cursor() as c:
+        with test_model._meta.db.cursor() as c:
             c.execute('SELECT * FROM person WHERE id = ?;', (1,))
             results = c.fetchall()
         assert results
@@ -88,7 +88,7 @@ class TestQueryExpression:
     def test_update_with_fk(self, related_models):
         model_with_fk, external_model = related_models
 
-        db = external_model.db
+        db = external_model._meta.db
 
         with db.cursor() as c:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
@@ -105,7 +105,7 @@ class TestQueryExpression:
         assert results
 
     def test_delete(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 7), ('z', 6)])
 
@@ -117,7 +117,7 @@ class TestQueryExpression:
         assert len(rows) == 1
 
     def test_get(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
 
         with db.cursor() as c:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
@@ -128,7 +128,7 @@ class TestQueryExpression:
         assert instance.age == 3
 
     def test_get_does_not_exists(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
 
@@ -136,7 +136,7 @@ class TestQueryExpression:
             test_model.qs.get(id=9000)
 
     def test_get_multiple_result(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 10), ('y', 10)])
 
@@ -144,7 +144,7 @@ class TestQueryExpression:
             test_model.qs.get(age=10)
 
     def test_first(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
@@ -160,7 +160,7 @@ class TestQueryExpression:
         assert not instance
 
     def test_all(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
@@ -184,7 +184,7 @@ class TestQueryExpression:
         result = test_model.qs.bulk_create([instance1, instance2, 'foobar'])
         assert result == 2
 
-        db = test_model.db
+        db = test_model._meta.db
 
         with db.cursor() as c:
             c.execute('SELECT * FROM person WHERE name = ? AND age = ?;', ('John', 33))
@@ -199,7 +199,7 @@ class TestQueryExpression:
     def test_select_related(self, related_models):
         model_with_fk, external_model = related_models
 
-        db = external_model.db
+        db = external_model._meta.db
         with db.cursor() as c:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
             c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('y', 1))
@@ -219,7 +219,7 @@ class TestQueryExpression:
     def test_select_related_namedtuple(self, related_models):
         model_with_fk, external_model = related_models
 
-        db = external_model.db
+        db = external_model._meta.db
 
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('foo', 18), ('bar', 19)])
@@ -240,7 +240,7 @@ class TestQueryExpression:
         assert results[2].author.age == 18
 
     def test_limit(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
@@ -252,7 +252,7 @@ class TestQueryExpression:
         assert results[1].id == 2
 
     def test_index(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
@@ -262,7 +262,7 @@ class TestQueryExpression:
         assert result.name == 'z'
 
     def test_values(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
@@ -283,7 +283,7 @@ class TestQueryExpression:
     def test_values_select_related(self, related_models):
         model_with_fk, external_model = related_models
 
-        db = external_model.db
+        db = external_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('foo', 18), ('bar', 19)])
             c.executemany('INSERT INTO book (title, person_id) VALUES (?, ?);', [('a', 1), ('b', 2), ('c', 1)])
@@ -301,7 +301,7 @@ class TestQueryExpression:
         assert result[2]["author__name"] == 'foo'
 
     def test_exists(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
 

@@ -16,10 +16,10 @@ class TestModel:
                 table_name = 'test_model_table'
                 db = test_db
 
-        assert len(Person._fields) == 2 + 1  # custom fields + auto created primary key
-        assert Person._fields[0].column_name == 'name'
-        assert Person._fields[1].column_name == 'test_column'
-        assert Person._fields[2].column_name == 'id'
+        assert len(Person._meta.fields) == 2 + 1  # custom fields + auto created primary key
+        assert Person._meta.fields[0].column_name == 'name'
+        assert Person._meta.fields[1].column_name == 'test_column'
+        assert Person._meta.fields[2].column_name == 'id'
 
         assert Person._meta.db == test_db
         assert Person._meta.table_name == 'test_model_table'
@@ -103,7 +103,7 @@ class TestModel:
         class Person(Model):
             title = CharField(max_length=120)
 
-        result = Person.check_field('title')
+        result = Person._meta.check_field('title')
         assert result.name == 'title'
 
     def test_check_field_invalid_field(self, test_db):
@@ -111,7 +111,7 @@ class TestModel:
             name = CharField(max_length=120)
 
         with pytest.raises(ValueError, match='.*age.*'):
-            Person.check_field('age')
+            Person._meta.check_field('age')
 
     def test_init(self, test_db):
         class Person(Model):
@@ -151,7 +151,7 @@ class TestModel:
         new_instance.save()
 
         select_previous_query = "SELECT name, age FROM person ORDER BY id"
-        with test_model.db.cursor() as curr:
+        with test_model._meta.db.cursor() as curr:
             curr.execute(select_previous_query)
             result = curr.fetchall()
 

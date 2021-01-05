@@ -34,7 +34,7 @@ def related_models(test_model):
         author = ForeignKey(to=test_model)
 
         class Meta:
-            db = test_model.db
+            db = test_model._meta.db
 
     Book.create_table()
     yield Book, test_model

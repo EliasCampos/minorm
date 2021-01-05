@@ -1,4 +1,4 @@
-from collections import OrderedDict
+from collections import deque, OrderedDict
 from itertools import chain
 import functools
 import operator
@@ -7,6 +7,24 @@ from minorm.exceptions import MultipleQueryResult
 from minorm.expressions import JoinExpression, OrderByExpression, WhereCondition
 from minorm.fields import ForeignKey
 from minorm.queries import DeleteQuery, InsertQuery, SelectQuery, UpdateQuery
+
+
+class RelationNode:
+
+    def __init__(self, base_model, field=None):
+        self.model = base_model
+        self.field = field
+        self.relations = OrderedDict()
+
+    def update(self, lookup_parts):
+        field_name, *rest_lookup_parts = lookup_parts
+        if field_name not in self.relations:
+            field = self.model._meta.get_fk_field(field_name)
+            self.relations[field_name] = RelationNode(base_model=field.to, field=field)
+
+        if rest_lookup_parts:
+            return self.relations[field_name].update(rest_lookup_parts)
+        return self.relations[field_name]
 
 
 class QuerySet:
@@ -18,7 +36,7 @@ class QuerySet:
         self._order_by = set()
         self._limit = None
 
-        self._related = {}
+        self._related = RelationNode(base_model=self.model)
         self._values_mapping = {}
 
     def filter(self, **kwargs):
@@ -40,13 +58,12 @@ class QuerySet:
 
     def select_related(self, *args):
         if len(args) == 1 and args[0] is None:
-            self._related = {}
+            self._related = RelationNode(base_model=self.model)
             return self
 
-        for field_name in args:
-            field = self.model._meta.check_field(field_name, with_pk=True)
-            if isinstance(field, ForeignKey):  # TODO: multiple tables in one join
-                self._related[field.to] = field
+        for lookup in args:
+            lookup_parts = lookup.split('__')
+            self._related.update(lookup_parts)
 
         return self
 
@@ -90,43 +107,42 @@ class QuerySet:
         if len(results) > 1:
             raise MultipleQueryResult
 
-        return self._instance_from_result(results)
+        return self._instance_from_row(results[0])
 
     def first(self):
-        self._values_mapping = {}
         self._limit = 1
         results = self._extract()
         if not results:
             return None
-        return self._instance_from_result(results)
+
+        if self._values_mapping:
+            print(self.query.render_sql(self.model._meta.db.spec))
+            return self._dict_from_row(results[0])
+        return self._instance_from_row(results[0])
 
     def all(self):
         extracted = self._extract()
         if self._values_mapping:
             return [self._dict_from_row(row) for row in extracted]
-        return [self._instance_from_row(row, self.model, self._related, is_tuple=True) for row in extracted]
+        return [self._instance_from_row(row) for row in extracted]
 
     def values(self, *args):
         if len(args) == 1 and args[0] is None:
             self._values_mapping = {}
             return self
 
-        for value in args:
-            val_parts = value.split('__', 1)
-            if len(val_parts) > 1:
-                rel = val_parts[0]
-                rel_field_name = val_parts[1]
-                for fk in self._related.values():
-                    if rel == fk.name:
-                        rel_field = fk.to._meta.check_field(rel_field_name, with_pk=True)
-                        self._values_mapping[value] = rel_field
-                        break
-                else:
-                    raise ValueError(f'{rel} does not belong supported relations.')
+        for lookup in args:
+            val_parts = lookup.split('__')
+            *relation_lookup, field_name = val_parts
+            if relation_lookup:
+                relation = self._related.update(relation_lookup)
             else:
-                val = val_parts[0]
-                field = self.model._meta.check_field(val, with_pk=True)
-                self._values_mapping[val] = field
+                relation = self._related
+
+            field = relation.model._meta.check_field(field_name, with_pk=True)
+            if relation not in self._values_mapping:
+                self._values_mapping[relation] = []
+            self._values_mapping[relation].append((lookup, field))
 
         return self
 
@@ -152,9 +168,8 @@ class QuerySet:
 
     @property
     def query(self):
-        joins = [JoinExpression.on_pk(fld.to._meta.table_name, fld.query_name, fld.to._meta.pk_field.query_name)
-                 for fld in self._related.values()]
-        query = (SelectQuery(table_name=self.model._meta.table_name, fields=self._get_all_fields())
+        joins = self._generate_joins()
+        query = (SelectQuery(table_name=self.model._meta.table_name, fields=self._get_all_column_names())
                  .join(joins)
                  .where(self._where)
                  .limit(self._limit)
@@ -229,37 +244,101 @@ class QuerySet:
 
         return conds
 
-    def _instance_from_result(self, results):
-        row = results[0]
-        instance = self._instance_from_row(row, self.model, self._related, is_tuple=False)
-        return instance
+    def _instance_from_row(self, row):
+        related_queue = deque([self._related])
+        parents = {}
 
-    def _instance_from_row(self, row, model, related=(), is_tuple=True):
-        fields = model._meta.fields
+        root_instance = None
+        while related_queue:
+            left_relation = related_queue.popleft()
+            model = left_relation.model
+            attr_names = [field.name for field in model._meta.fields]
+            kwargs = dict(zip(attr_names, row))
+            instance = model(**kwargs)
 
-        attr_names = [field.name for field in fields]
-        kwargs = dict(zip(attr_names, row))
+            if left_relation.field:
+                field_name, parent = parents[left_relation.field]
+                setattr(parent, field_name, instance)
+            else:  # in case of base relation node, base on queryset model
+                root_instance = instance
 
-        if related:
-            row_shift = len(attr_names)
-            for rel_model in related:  # TODO: related instance inside related instance
-                rel_instance = self._instance_from_row(row[row_shift:], rel_model, related=(), is_tuple=is_tuple)
-                rel_attr_name = next(
-                    (field.name for field in fields if isinstance(field, ForeignKey) and field.to is rel_model)
-                )
-                kwargs[rel_attr_name] = rel_instance
-                row_shift += len(rel_model._meta.fields)
+            row = row[len(kwargs):]
 
-        result = model.query_namedtuple(**kwargs) if is_tuple else model(**kwargs)
-        return result
+            for field_name, right_relation in left_relation.relations.items():
+                related_queue.append(right_relation)
+                fk = right_relation.field
+                parents[fk] = (field_name, instance)
+
+        return root_instance
 
     def _dict_from_row(self, row):
-        return dict(zip(self._values_mapping, row))
+        related_queue = deque([self._related])
+        result = {}
 
-    def _get_all_fields(self):
-        if self._values_mapping:
-            field_seq = [field.query_name for field in self._values_mapping.values()]
-        else:
-            all_models = (self.model,) + tuple(self._related)
-            field_seq = chain.from_iterable(model._meta.query_names for model in all_models)
-        return tuple(field_seq)
+        while related_queue:
+            relation = related_queue.popleft()
+            if relation in self._values_mapping:
+                val_names = [lookup for lookup, __ in self._values_mapping[relation]]
+                related_values = dict(zip(val_names, row))
+                result.update(**related_values)
+                row = row[len(related_values):]
+
+            for next_relation in relation.relations.values():
+                related_queue.append(next_relation)
+
+        return result
+
+    def _get_all_column_names(self):
+        relation_counter = 0
+        related_queue = deque([self._related])
+        name_shortcuts = {}
+        column_names_seq = []
+        while related_queue:
+            relation = related_queue.popleft()
+            if relation.field:
+                field_prefix = name_shortcuts[relation.field]
+            else:  # in case of base relation node, base on queryset model
+                field_prefix = relation.model._meta.table_name
+
+            if self._values_mapping:
+                fields = [field for __, field in self._values_mapping.get(relation, [])]
+            else:
+                fields = relation.model._meta.fields
+            column_names_seq.extend(f'{field_prefix}.{field.column_name}' for field in fields)
+
+            for next_relation in relation.relations.values():
+                related_queue.append(next_relation)
+                relation_counter += 1
+                name_shortcuts[next_relation.field] = f'T{relation_counter}'  # T1.column, T2.column, etc..
+
+        return column_names_seq
+
+    def _generate_joins(self):
+        relation_counter = 0
+
+        related_queue = deque([self._related])
+        name_shortcuts = {}
+        joins = []
+        while related_queue:
+            left_relation = related_queue.popleft()
+            for field_name, right_relation in left_relation.relations.items():
+                related_queue.append(right_relation)
+                relation_counter += 1
+
+                fk = right_relation.field
+                pk_shortcut_prefix = f'T{relation_counter}'  # INNER JOIN table_A T1
+                name_shortcuts[fk] = pk_shortcut_prefix
+
+                if left_relation.field:
+                    fk_field_prefix = name_shortcuts[left_relation.field]  # ON T1.b_id = Tk.id
+                else:  # in case of base relation node, base on queryset model
+                    fk_field_prefix = left_relation.model._meta.table_name  # ON base_model_table.a_id = T1.id
+
+                join = JoinExpression.on_pk(
+                    outer_table=f'{fk.to._meta.table_name} {pk_shortcut_prefix}',
+                    fk_field=f'{fk_field_prefix}.{fk.column_name}',
+                    pk_field=f'{pk_shortcut_prefix}.{fk.to._meta.pk_field.column_name}',
+                )
+                joins.append(join)
+
+        return joins

@@ -3,7 +3,7 @@ from collections import namedtuple
 from minorm.connectors import connector
 from minorm.exceptions import DoesNotExists
 from minorm.expressions import WhereCondition
-from minorm.fields import AutoField, Field
+from minorm.fields import AutoField, Field, ForeignKey
 from minorm.managers import QuerySet
 from minorm.queries import CreateTableQuery, DeleteQuery, DropTableQuery, InsertQuery, UpdateQuery, SelectQuery
 
@@ -57,6 +57,13 @@ class ModelMetaData:
 
     def get_field(self, field_name):
         return self.check_field(field_name, with_pk=True)
+
+    def get_fk_field(self, field_name):
+        for field in self.fields:
+            if field.name == field_name and isinstance(field, ForeignKey):
+                return field
+
+        raise ValueError(f'{field_name} is not a valid foreign relation for model {self._model_name}.')
 
 
 class ModelMetaclass(type):

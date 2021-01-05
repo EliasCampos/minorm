@@ -1,10 +1,12 @@
 import pytest
 
 from minorm.exceptions import MultipleQueryResult
+from minorm.fields import CharField, ForeignKey
 from minorm.managers import QuerySet, OrderByExpression
+from minorm.models import Model
 
 
-class TestQueryExpression:
+class TestQuerySet:
 
     def test_filter_query(self, test_model):
         query = QuerySet(model=test_model)
@@ -215,6 +217,93 @@ class TestQueryExpression:
         assert result.author.pk == 1
         assert result.author.name == 'x'
         assert result.author.age == 3
+
+    def test_select_related_multiple(self, test_db):
+
+        class L11(Model):
+            title = CharField(max_length=100)
+
+        class L21(Model):
+            title = CharField(max_length=100)
+            l11 = ForeignKey(L11)
+
+        class L22(Model):
+            title = CharField(max_length=100)
+            l11 = ForeignKey(L11, null=True)
+
+        class L31(Model):
+            title = CharField(max_length=100)
+            l21 = ForeignKey(L21)
+            l22 = ForeignKey(L22)
+            l21_other = ForeignKey(L21, column_name='l21_other')
+
+        L11.create_table()
+        L21.create_table()
+        L22.create_table()
+        L31.create_table()
+
+        with test_db.cursor() as c:
+            c.execute('INSERT INTO L11 (title) VALUES (?);', ('l11',))
+            c.execute('INSERT INTO L21 (title, l11_id) VALUES (?, ?);', ('l20', 1))
+            c.execute('INSERT INTO L22 (title) VALUES (?);', ('l2x',))
+            c.execute('INSERT INTO L22 (title) VALUES (?);', ('l2y',))
+            c.execute('INSERT INTO L22 (title, l11_id) VALUES (?, ?);', ('l22', 1))
+            c.execute('INSERT INTO L21 (title, l11_id) VALUES (?, ?);', ('l21', 1))
+            c.execute('INSERT INTO L31 (title, l21_id, l21_other, l22_id) VALUES (?, ?, ?, ?);', ('l31', 2, 1, 3))
+
+        qs = L31.qs.select_related('l21__l11', 'l22')
+        instance = qs.first()
+
+        assert instance.pk == 1
+        assert instance.title == 'l31'
+        assert instance.l21.pk == 2
+        assert instance.l21.title == 'l21'
+        assert instance.l21.l11.pk == 1
+        assert instance.l21.l11.title == 'l11'
+
+        assert instance.l21_other == 1
+        assert instance.l22.pk == 3
+        assert instance.l22.title == 'l22'
+        assert instance.l22.l11 == 1
+
+    def test_values_multiple_relations(self, test_db):
+
+        class L11(Model):
+            title = CharField(max_length=100)
+            text = CharField(max_length=200)
+
+        class L21(Model):
+            title = CharField(max_length=100)
+            l11 = ForeignKey(L11)
+
+        class L22(Model):
+            title = CharField(max_length=100)
+
+        class L31(Model):
+            title = CharField(max_length=100)
+            l21 = ForeignKey(L21)
+            l22 = ForeignKey(L22)
+
+        L11.create_table()
+        L21.create_table()
+        L22.create_table()
+        L31.create_table()
+
+        with test_db.cursor() as c:
+            c.execute('INSERT INTO L11 (title, text) VALUES (?, ?);', ('l11', "FOOBAR"))
+            c.execute('INSERT INTO L21 (title, l11_id) VALUES (?, ?);', ('l20', 1))
+            c.execute('INSERT INTO L22 (title) VALUES (?);', ('l2x',))
+            c.execute('INSERT INTO L22 (title) VALUES (?);', ('l2y',))
+            c.execute('INSERT INTO L22 (title) VALUES (?);', ('l22',))
+            c.execute('INSERT INTO L21 (title, l11_id) VALUES (?, ?);', ('l21', 1))
+            c.execute('INSERT INTO L31 (title, l21_id, l22_id) VALUES (?, ?, ?);', ('l31', 2, 3))
+
+        qs = L31.qs.values('l21__l11__text', 'title', 'l22__title', 'l22')
+        instance = qs.first()
+        assert instance['l21__l11__text'] == "FOOBAR"
+        assert instance['title'] == 'l31'
+        assert instance['l22__title'] == 'l22'
+        assert instance['l22'] == 3
 
     def test_select_related_namedtuple(self, related_models):
         model_with_fk, external_model = related_models

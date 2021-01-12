@@ -154,6 +154,13 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
     - :code:`in` - checks if value is between given options
     - :code:`startswith`, :code:`endswith`, :code:`contains` - check inclusion of a string
 
+    It's also possible to filter by foreign relation fields:
+
+    .. code:: python
+
+        qs = Book.qs.filter(author__name="Mark Twain", price__lt=42)
+        result = qs.all()  # will perform join of `author` table
+
 :code:`aswell(**lookups)`:
     Make query result to include items that also matches lookups listed in the method:
 
@@ -240,8 +247,6 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
 TODO
 ----
 * add more model fields
-* add join of 3 and more tables in `select_related`
-* add filter lookups over fields of foreign relations
 * test Postgresql support
 * add basic aggregation functions (SUM, COUNT, etc)
 * add transaction support

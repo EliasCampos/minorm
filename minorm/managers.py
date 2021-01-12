@@ -1,30 +1,89 @@
-from collections import deque, OrderedDict
-from itertools import chain
+from collections import OrderedDict
 import functools
 import operator
 
 from minorm.exceptions import MultipleQueryResult
 from minorm.expressions import JoinExpression, OrderByExpression, WhereCondition
-from minorm.fields import ForeignKey
 from minorm.queries import DeleteQuery, InsertQuery, SelectQuery, UpdateQuery
 
 
 class RelationNode:
 
-    def __init__(self, base_model, field=None):
+    def __init__(self, base_model, field=None, depth=0, position=0):
         self.model = base_model
         self.field = field
+
+        self.depth = depth
+        self.position = position
+
         self.relations = OrderedDict()
 
-    def update(self, lookup_parts):
+    def resolve_relation(self, lookup_parts):
         field_name, *rest_lookup_parts = lookup_parts
         if field_name not in self.relations:
             field = self.model._meta.get_fk_field(field_name)
-            self.relations[field_name] = RelationNode(base_model=field.to, field=field)
+            position = len(self.relations) + 1
+            self.relations[field_name] = RelationNode(base_model=field.to,
+                                                      field=field,
+                                                      depth=self.depth + 1,
+                                                      position=position)
 
         if rest_lookup_parts:
-            return self.relations[field_name].update(rest_lookup_parts)
+            return self.relations[field_name].resolve_relation(rest_lookup_parts)
         return self.relations[field_name]
+
+    @property
+    def is_root_node(self):
+        return self.depth == self.position == 0
+
+    @property
+    def table_shortcut(self):
+        if self.is_root_node:
+            return self.model._meta.table_name
+
+        return f'T{self.depth}{self.position}'
+
+    @property
+    def table_name(self):
+        if self.is_root_node:
+            return self.model._meta.table_name
+
+        return f'{self.model._meta.table_name} {self.table_shortcut}'
+
+    def get_column_names(self):
+        column_names = [f'{self.table_shortcut}.{field.column_name}' for field in self.model._meta.fields]
+        for rel in self.relations.values():
+            column_names.extend(rel.get_column_names())
+        return column_names
+
+    def get_joins(self):
+        joins = []
+        for attr_name, rel in self.relations.items():
+            fk = self.model._meta.get_fk_field(attr_name)
+            joins.append(
+                JoinExpression.on_pk(
+                    outer_table=rel.table_name,
+                    fk_field=f'{self.table_shortcut}.{fk.column_name}',
+                    pk_field=f'{rel.table_shortcut}.{fk.to._meta.pk_field.column_name}',
+                )
+            )
+            joins.extend(rel.get_joins())
+
+        return joins
+
+    def row_to_instance(self, row, is_namedtuple, row_shift=0):
+        model = self.model
+
+        row_part = row[row_shift:]
+        attr_names = (field.name for field in model._meta.fields)
+        kwargs = dict(zip(attr_names, row_part))
+        row_shift += len(kwargs)
+
+        for fk_name, rel in self.relations.items():
+            kwargs[fk_name], row_shift = rel.row_to_instance(row, is_namedtuple, row_shift=row_shift)
+
+        klass = model.query_namedtuple if is_namedtuple else model
+        return klass(**kwargs), row_shift
 
 
 class QuerySet:
@@ -37,7 +96,7 @@ class QuerySet:
         self._limit = None
 
         self._related = RelationNode(base_model=self.model)
-        self._values_mapping = {}
+        self._values_mapping = OrderedDict()
 
     def filter(self, **kwargs):
         where_cond = self._where_action(**kwargs)
@@ -63,7 +122,7 @@ class QuerySet:
 
         for lookup in args:
             lookup_parts = lookup.split('__')
-            self._related.update(lookup_parts)
+            self._related.resolve_relation(lookup_parts)
 
         return self
 
@@ -116,7 +175,6 @@ class QuerySet:
             return None
 
         if self._values_mapping:
-            print(self.query.render_sql(self.model._meta.db.spec))
             return self._dict_from_row(results[0])
         return self._instance_from_row(results[0])
 
@@ -124,25 +182,23 @@ class QuerySet:
         extracted = self._extract()
         if self._values_mapping:
             return [self._dict_from_row(row) for row in extracted]
-        return [self._instance_from_row(row) for row in extracted]
+        return [self._instance_from_row(row, is_namedtuple=True) for row in extracted]
 
     def values(self, *args):
         if len(args) == 1 and args[0] is None:
-            self._values_mapping = {}
+            self._values_mapping = OrderedDict()
             return self
 
         for lookup in args:
             val_parts = lookup.split('__')
             *relation_lookup, field_name = val_parts
             if relation_lookup:
-                relation = self._related.update(relation_lookup)
+                relation = self._related.resolve_relation(relation_lookup)
             else:
                 relation = self._related
 
             field = relation.model._meta.check_field(field_name, with_pk=True)
-            if relation not in self._values_mapping:
-                self._values_mapping[relation] = []
-            self._values_mapping[relation].append((lookup, field))
+            self._values_mapping[lookup] = f'{relation.table_shortcut}.{field.column_name}'
 
         return self
 
@@ -168,8 +224,10 @@ class QuerySet:
 
     @property
     def query(self):
-        joins = self._generate_joins()
-        query = (SelectQuery(table_name=self.model._meta.table_name, fields=self._get_all_column_names())
+        column_names = self._values_mapping.values() if self._values_mapping else self._related.get_column_names()
+        joins = self._related.get_joins()
+
+        query = (SelectQuery(table_name=self._related.table_name, fields=column_names)
                  .join(joins)
                  .where(self._where)
                  .limit(self._limit)
@@ -244,101 +302,9 @@ class QuerySet:
 
         return conds
 
-    def _instance_from_row(self, row):
-        related_queue = deque([self._related])
-        parents = {}
-
-        root_instance = None
-        while related_queue:
-            left_relation = related_queue.popleft()
-            model = left_relation.model
-            attr_names = [field.name for field in model._meta.fields]
-            kwargs = dict(zip(attr_names, row))
-            instance = model(**kwargs)
-
-            if left_relation.field:
-                field_name, parent = parents[left_relation.field]
-                setattr(parent, field_name, instance)
-            else:  # in case of base relation node, base on queryset model
-                root_instance = instance
-
-            row = row[len(kwargs):]
-
-            for field_name, right_relation in left_relation.relations.items():
-                related_queue.append(right_relation)
-                fk = right_relation.field
-                parents[fk] = (field_name, instance)
-
-        return root_instance
+    def _instance_from_row(self, row, is_namedtuple=False):
+        instance, __ = self._related.row_to_instance(row, is_namedtuple=is_namedtuple)
+        return instance
 
     def _dict_from_row(self, row):
-        related_queue = deque([self._related])
-        result = {}
-
-        while related_queue:
-            relation = related_queue.popleft()
-            if relation in self._values_mapping:
-                val_names = [lookup for lookup, __ in self._values_mapping[relation]]
-                related_values = dict(zip(val_names, row))
-                result.update(**related_values)
-                row = row[len(related_values):]
-
-            for next_relation in relation.relations.values():
-                related_queue.append(next_relation)
-
-        return result
-
-    def _get_all_column_names(self):
-        relation_counter = 0
-        related_queue = deque([self._related])
-        name_shortcuts = {}
-        column_names_seq = []
-        while related_queue:
-            relation = related_queue.popleft()
-            if relation.field:
-                field_prefix = name_shortcuts[relation.field]
-            else:  # in case of base relation node, base on queryset model
-                field_prefix = relation.model._meta.table_name
-
-            if self._values_mapping:
-                fields = [field for __, field in self._values_mapping.get(relation, [])]
-            else:
-                fields = relation.model._meta.fields
-            column_names_seq.extend(f'{field_prefix}.{field.column_name}' for field in fields)
-
-            for next_relation in relation.relations.values():
-                related_queue.append(next_relation)
-                relation_counter += 1
-                name_shortcuts[next_relation.field] = f'T{relation_counter}'  # T1.column, T2.column, etc..
-
-        return column_names_seq
-
-    def _generate_joins(self):
-        relation_counter = 0
-
-        related_queue = deque([self._related])
-        name_shortcuts = {}
-        joins = []
-        while related_queue:
-            left_relation = related_queue.popleft()
-            for field_name, right_relation in left_relation.relations.items():
-                related_queue.append(right_relation)
-                relation_counter += 1
-
-                fk = right_relation.field
-                pk_shortcut_prefix = f'T{relation_counter}'  # INNER JOIN table_A T1
-                name_shortcuts[fk] = pk_shortcut_prefix
-
-                if left_relation.field:
-                    fk_field_prefix = name_shortcuts[left_relation.field]  # ON T1.b_id = Tk.id
-                else:  # in case of base relation node, base on queryset model
-                    fk_field_prefix = left_relation.model._meta.table_name  # ON base_model_table.a_id = T1.id
-
-                join = JoinExpression.on_pk(
-                    outer_table=f'{fk.to._meta.table_name} {pk_shortcut_prefix}',
-                    fk_field=f'{fk_field_prefix}.{fk.column_name}',
-                    pk_field=f'{pk_shortcut_prefix}.{fk.to._meta.pk_field.column_name}',
-                )
-                joins.append(join)
-
-        return joins
+        return dict(zip(self._values_mapping, row))

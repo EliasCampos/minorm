@@ -7,3 +7,6 @@ init:
 
 test: init
 	$(VENV)/bin/tox
+
+lint: init
+	$(VENV)/bin/tox -e lint

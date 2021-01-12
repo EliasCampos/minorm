@@ -14,7 +14,7 @@ class Field:
         self._name = None
         self._model = None
 
-    def adapt(self, value):
+    def adapt(self, value):  # pylint: disable=no-self-use
         return value
 
     def adapt_value(self, value):
@@ -23,7 +23,7 @@ class Field:
 
         return self.adapt(value)
 
-    def to_query_parameter(self, value):
+    def to_query_parameter(self, value):  # pylint: disable=no-self-use
         return value
 
     def render_sql(self):
@@ -150,7 +150,7 @@ class DateTimeField(Field):
 class AutoField(Field):
 
     def __init__(self, pk=False, null=False, unique=False, default=None, column_name=None):
-        super(AutoField, self).__init__(pk=pk, null=null, unique=unique, default=default, column_name=column_name)
+        super().__init__(pk=pk, null=null, unique=unique, default=default, column_name=column_name)
         self._null = self.is_pk
         self._unique = False
 
@@ -167,6 +167,7 @@ class AutoField(Field):
 class ForeignKey(Field):
 
     def __init__(self, to, pk=False, null=False, unique=False, default=None, column_name=None):
+        # pylint: disable=too-many-arguments
         if not column_name:
             column_name = f"{to._meta.table_name}_id"
 

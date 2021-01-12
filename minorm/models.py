@@ -67,10 +67,11 @@ class ModelMetaData:
 
 
 class ModelMetaclass(type):
+    # pylint: disable=no-value-for-parameter
 
-    def __new__(mcs, name, bases, namespace):
+    def __new__(cls, name, bases, namespace):
         if not bases:
-            return super().__new__(mcs, name, bases, namespace)
+            return super().__new__(cls, name, bases, namespace)
 
         fields = [class_attr for class_attr in namespace.values() if isinstance(class_attr, Field)]
         # Extract model meta
@@ -92,7 +93,7 @@ class ModelMetaclass(type):
         fields.append(pk_field)
 
         # Setup model pk, meta and queryset attributes:
-        model = super().__new__(mcs, name, bases, namespace)
+        model = super().__new__(cls, name, bases, namespace)
 
         if not pk_field.model:
             setattr(pk_field, '_model', model)
@@ -195,7 +196,7 @@ class Model(metaclass=ModelMetaclass):
 
     def delete(self):
         if not self.pk:
-            return
+            return 0
 
         model = self.__class__
         pk_cond = WhereCondition(model._meta.pk_field.query_name, WhereCondition.EQ, self.pk)

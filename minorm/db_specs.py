@@ -10,7 +10,7 @@ class BaseSpec:
         assert self.VALUE_ESCAPE, f"{self.__class__.__name__} should define value escape."
         assert self.AUTO_FIELD_TYPE,  f"{self.__class__.__name__} should define auto field type."
 
-        self.connection_url = connection_url  # TODO: add validation for certain database
+        self.connection_url = connection_url
 
         self.db_driver = self.prepare_db_driver()
 
@@ -40,7 +40,7 @@ class SQLiteSpec(BaseSpec):
     AUTO_FIELD_CONSTRAINS = ("AUTOINCREMENT",)
 
     def prepare_db_driver(self):
-        import sqlite3
+        import sqlite3  # pylint: disable=import-outside-toplevel
 
         sqlite3.register_adapter(Decimal, str)
         sqlite3.register_converter("DECIMAL", Decimal)
@@ -54,5 +54,8 @@ class PostgreSQLSpec(BaseSpec):
     HAS_AUTO_FIELD_AUTO_INCREMENT = False
 
     def prepare_db_driver(self):
-        import psycopg2
+        try:
+            import psycopg2  # pylint: disable=import-outside-toplevel
+        except ImportError as err:
+            raise RuntimeError(f"{self.__class__.__name__} requires psycopg2 to be installed.") from err
         return psycopg2

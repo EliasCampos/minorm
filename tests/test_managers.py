@@ -55,6 +55,110 @@ class TestQuerySet:
         assert result is query
         assert result._order_by == {OrderByExpression('person.age', 'DESC'), OrderByExpression('person.name', 'ASC')}
 
+    def test_filter_fk_fields(self, related_models):
+        model_with_fk, external_model = related_models
+
+        db = external_model._meta.db
+
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('A', 17))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('a', 1))
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('B', 18))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('b', 2))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('d', 2))
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('C', 19))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('c', 3))
+
+        qs = model_with_fk.qs.filter(author__name__in=('A', 'B'), author__age__gte=18)
+        results = qs.all()
+        assert len(results) == 2
+        assert results[0].title == 'b'
+        assert results[0].author == 2
+        assert results[1].title == 'd'
+        assert results[1].author == 2
+
+    def test_aswell_fk_fields(self, related_models):
+        model_with_fk, external_model = related_models
+
+        db = external_model._meta.db
+
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('A', 17))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('a', 1))
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('B', 18))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('b', 2))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('d', 2))
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('C', 19))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('c', 3))
+
+        qs = model_with_fk.qs.filter(author__name='A').aswell(author__age__gt=18)
+        results = qs.all()
+        assert len(results) == 2
+        assert results[0].title == 'a'
+        assert results[0].author == 1
+        assert results[1].title == 'c'
+        assert results[1].author == 3
+
+    def test_filter_own_and_fk_fields(self, related_models):
+        model_with_fk, external_model = related_models
+
+        db = external_model._meta.db
+
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('A', 17))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('a', 1))
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('B', 18))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('a', 2))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('b', 2))
+
+        qs = model_with_fk.qs.filter(title='a').filter(author__name='A')
+        results = qs.all()
+        assert len(results) == 1
+        assert results[0].title == 'a'
+        assert results[0].author == 1
+
+    def test_filter_inner_relations(self, test_db):
+
+        class L1(Model):
+            title = CharField(max_length=100)
+
+        class L2(Model):
+            title = CharField(max_length=100)
+            l11 = ForeignKey(L1)
+
+        class L3(Model):
+            title = CharField(max_length=100)
+            l21 = ForeignKey(L2)
+
+        L1.create_table()
+        L2.create_table()
+        L3.create_table()
+
+        with test_db.cursor() as c:
+            c.execute('INSERT INTO L1 (title) VALUES (?);', ('l11',))
+            c.execute('INSERT INTO L1 (title) VALUES (?);', ('l12',))
+            c.execute('INSERT INTO L1 (title) VALUES (?);', ('l111',))
+            c.execute('INSERT INTO L2 (title, l1_id) VALUES (?, ?);', ('l21', 1))  # with l11
+            c.execute('INSERT INTO L2 (title, l1_id) VALUES (?, ?);', ('l22', 2))
+            c.execute('INSERT INTO L2 (title, l1_id) VALUES (?, ?);', ('l211', 1))  # also with l11
+            c.execute('INSERT INTO L2 (title, l1_id) VALUES (?, ?);', ('l21', 3))
+            c.execute('INSERT INTO L3 (title, l2_id) VALUES (?, ?);', ('l31', 1))
+            c.execute('INSERT INTO L3 (title, l2_id) VALUES (?, ?);', ('l32', 2))
+            c.execute('INSERT INTO L3 (title, l2_id) VALUES (?, ?);', ('l311', 3))
+            c.execute('INSERT INTO L3 (title, l2_id) VALUES (?, ?);', ('l31x', 4))  # also with L2 = l21 but L1 != l11
+
+        qs = L3.qs.filter(l21__l11__title='l11').select_related('l21')
+        result = qs.all()
+        assert len(result) == 2
+
+        assert result[0].title == 'l31'
+        assert result[0].l21.title == 'l21'
+        assert result[0].l21.l11 == 1
+
+        assert result[1].title == 'l311'
+        assert result[1].l21.title == 'l211'
+        assert result[1].l21.l11 == 1
+
     def test_update(self, test_model):
         db = test_model._meta.db
         with db.cursor() as c:

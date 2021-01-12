@@ -67,10 +67,9 @@ class TestWhereCondition:
         field = f'test'
         assert WhereCondition.resolve_lookup(field) == ('test', None)
 
-    def test_resolve_lookup_value_error(self):
+    def test_resolve_lookup_eq_case(self):
         invalid_lookup = 'foobar'
-        with pytest.raises(ValueError, match=r'.*lookup.*'):
-            WhereCondition.resolve_lookup(f'test__{invalid_lookup}')
+        assert WhereCondition.resolve_lookup(invalid_lookup) == ('foobar', None)
 
 
 class TestOrderByExpression:

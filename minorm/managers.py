@@ -3,33 +3,35 @@ import functools
 import operator
 
 from minorm.exceptions import MultipleQueryResult
-from minorm.expressions import JoinExpression, OrderByExpression, WhereCondition
+from minorm.expressions import JoinExpression, LOOKUP_SEPARATOR, OrderByExpression, WhereCondition
 from minorm.queries import DeleteQuery, InsertQuery, SelectQuery, UpdateQuery
 
 
 class RelationNode:
+    """A helper class for constructing nested foreign relations."""
 
-    def __init__(self, base_model, field=None, depth=0, position=0):
+    def __init__(self, base_model, depth=0, position=0):
         self.model = base_model
-        self.field = field
 
         self.depth = depth
         self.position = position
 
+        self.is_selected = False  # should be True when the relation is marked in `select_related` method
+
         self.relations = OrderedDict()
 
-    def resolve_relation(self, lookup_parts):
+    def resolve_relation(self, lookup_parts, is_selected=False):
         field_name, *rest_lookup_parts = lookup_parts
         if field_name not in self.relations:
             field = self.model._meta.get_fk_field(field_name)
             position = len(self.relations) + 1
-            self.relations[field_name] = RelationNode(base_model=field.to,
-                                                      field=field,
-                                                      depth=self.depth + 1,
-                                                      position=position)
+            self.relations[field_name] = RelationNode(base_model=field.to, depth=self.depth + 1, position=position)
+
+        if is_selected:
+            self.relations[field_name].is_selected = True
 
         if rest_lookup_parts:
-            return self.relations[field_name].resolve_relation(rest_lookup_parts)
+            return self.relations[field_name].resolve_relation(rest_lookup_parts, is_selected=is_selected)
         return self.relations[field_name]
 
     @property
@@ -53,7 +55,8 @@ class RelationNode:
     def get_column_names(self):
         column_names = [f'{self.table_shortcut}.{field.column_name}' for field in self.model._meta.fields]
         for rel in self.relations.values():
-            column_names.extend(rel.get_column_names())
+            if rel.is_selected:
+                column_names.extend(rel.get_column_names())
         return column_names
 
     def get_joins(self):
@@ -80,7 +83,8 @@ class RelationNode:
         row_shift += len(kwargs)
 
         for fk_name, rel in self.relations.items():
-            kwargs[fk_name], row_shift = rel.row_to_instance(row, is_namedtuple, row_shift=row_shift)
+            if rel.is_selected:
+                kwargs[fk_name], row_shift = rel.row_to_instance(row, is_namedtuple, row_shift=row_shift)
 
         klass = model.query_namedtuple if is_namedtuple else model
         return klass(**kwargs), row_shift
@@ -121,8 +125,8 @@ class QuerySet:
             return self
 
         for lookup in args:
-            lookup_parts = lookup.split('__')
-            self._related.resolve_relation(lookup_parts)
+            lookup_parts = lookup.split(LOOKUP_SEPARATOR)
+            self._related.resolve_relation(lookup_parts, is_selected=True)
 
         return self
 
@@ -190,7 +194,7 @@ class QuerySet:
             return self
 
         for lookup in args:
-            val_parts = lookup.split('__')
+            val_parts = lookup.split(LOOKUP_SEPARATOR)
             *relation_lookup, field_name = val_parts
             if relation_lookup:
                 relation = self._related.resolve_relation(relation_lookup)
@@ -253,17 +257,27 @@ class QuerySet:
         where_conds.extend(args)
 
         for key, value in kwargs.items():
-            field_name, lookup = WhereCondition.resolve_lookup(key)
-            field = self.model._meta.check_field(field_name, with_pk=True)
-            adopted_value = field.to_query_parameter(value)
+            field_part, lookup = WhereCondition.resolve_lookup(key)
+            *rel_lookups, field_name = field_part.split(LOOKUP_SEPARATOR)
+            if rel_lookups:
+                related = self._related.resolve_relation(rel_lookups)
+            else:
+                related = self._related
 
-            where_cond = WhereCondition.for_lookup(field.query_name, lookup, adopted_value)
+            field = related.model._meta.check_field(field_name, with_pk=True)
+            adopted_value = field.to_query_parameter(value)
+            where_cond = WhereCondition.for_lookup(
+                f'{related.table_shortcut}.{field.column_name}', lookup, adopted_value
+            )
             where_conds.append(where_cond)
 
         result = functools.reduce(operator.and_, where_conds) if where_conds else None
         return result
 
     def _reset_where(self, where_cond, op):
+        if not where_cond:
+            return
+
         if not self._where:
             self._where = where_cond
         else:

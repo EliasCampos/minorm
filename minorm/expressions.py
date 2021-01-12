@@ -1,6 +1,9 @@
 from collections import namedtuple
 
 
+LOOKUP_SEPARATOR = '__'
+
+
 class WhereCondition:
     AND = 'AND'
     OR = 'OR'
@@ -88,18 +91,16 @@ class WhereCondition:
         return self
 
     @classmethod
-    def resolve_lookup(cls, field_name):
-        parts = field_name.split('__')
-        field = parts[0]
-        if len(parts) == 2:
-            lookups = dict(cls.LOOKUP_MAPPING)
-            if parts[1] not in lookups:
-                raise ValueError(f'Invalid lookup expression: {parts[1]}')
-            lookup = parts[1]
-        else:
-            lookup = None
+    def resolve_lookup(cls, lookup_key):
+        *rest, lookup = lookup_key.split(LOOKUP_SEPARATOR)
 
-        return field, lookup
+        lookups = dict(cls.LOOKUP_MAPPING)
+        if lookup not in lookups:
+            lookup = None
+            field_name = lookup_key
+        else:
+            field_name = LOOKUP_SEPARATOR.join(rest)
+        return field_name, lookup
 
     @classmethod
     def for_lookup(cls, field_name, lookup, value):

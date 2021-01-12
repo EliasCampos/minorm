@@ -1,10 +1,12 @@
 import pytest
 
 from minorm.exceptions import MultipleQueryResult
+from minorm.fields import CharField, ForeignKey
 from minorm.managers import QuerySet, OrderByExpression
+from minorm.models import Model
 
 
-class TestQueryExpression:
+class TestQuerySet:
 
     def test_filter_query(self, test_model):
         query = QuerySet(model=test_model)
@@ -53,8 +55,112 @@ class TestQueryExpression:
         assert result is query
         assert result._order_by == {OrderByExpression('person.age', 'DESC'), OrderByExpression('person.name', 'ASC')}
 
+    def test_filter_fk_fields(self, related_models):
+        model_with_fk, external_model = related_models
+
+        db = external_model._meta.db
+
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('A', 17))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('a', 1))
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('B', 18))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('b', 2))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('d', 2))
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('C', 19))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('c', 3))
+
+        qs = model_with_fk.qs.filter(author__name__in=('A', 'B'), author__age__gte=18)
+        results = qs.all()
+        assert len(results) == 2
+        assert results[0].title == 'b'
+        assert results[0].author == 2
+        assert results[1].title == 'd'
+        assert results[1].author == 2
+
+    def test_aswell_fk_fields(self, related_models):
+        model_with_fk, external_model = related_models
+
+        db = external_model._meta.db
+
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('A', 17))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('a', 1))
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('B', 18))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('b', 2))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('d', 2))
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('C', 19))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('c', 3))
+
+        qs = model_with_fk.qs.filter(author__name='A').aswell(author__age__gt=18)
+        results = qs.all()
+        assert len(results) == 2
+        assert results[0].title == 'a'
+        assert results[0].author == 1
+        assert results[1].title == 'c'
+        assert results[1].author == 3
+
+    def test_filter_own_and_fk_fields(self, related_models):
+        model_with_fk, external_model = related_models
+
+        db = external_model._meta.db
+
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('A', 17))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('a', 1))
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('B', 18))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('a', 2))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('b', 2))
+
+        qs = model_with_fk.qs.filter(title='a').filter(author__name='A')
+        results = qs.all()
+        assert len(results) == 1
+        assert results[0].title == 'a'
+        assert results[0].author == 1
+
+    def test_filter_inner_relations(self, test_db):
+
+        class L1(Model):
+            title = CharField(max_length=100)
+
+        class L2(Model):
+            title = CharField(max_length=100)
+            l11 = ForeignKey(L1)
+
+        class L3(Model):
+            title = CharField(max_length=100)
+            l21 = ForeignKey(L2)
+
+        L1.create_table()
+        L2.create_table()
+        L3.create_table()
+
+        with test_db.cursor() as c:
+            c.execute('INSERT INTO L1 (title) VALUES (?);', ('l11',))
+            c.execute('INSERT INTO L1 (title) VALUES (?);', ('l12',))
+            c.execute('INSERT INTO L1 (title) VALUES (?);', ('l111',))
+            c.execute('INSERT INTO L2 (title, l1_id) VALUES (?, ?);', ('l21', 1))  # with l11
+            c.execute('INSERT INTO L2 (title, l1_id) VALUES (?, ?);', ('l22', 2))
+            c.execute('INSERT INTO L2 (title, l1_id) VALUES (?, ?);', ('l211', 1))  # also with l11
+            c.execute('INSERT INTO L2 (title, l1_id) VALUES (?, ?);', ('l21', 3))
+            c.execute('INSERT INTO L3 (title, l2_id) VALUES (?, ?);', ('l31', 1))
+            c.execute('INSERT INTO L3 (title, l2_id) VALUES (?, ?);', ('l32', 2))
+            c.execute('INSERT INTO L3 (title, l2_id) VALUES (?, ?);', ('l311', 3))
+            c.execute('INSERT INTO L3 (title, l2_id) VALUES (?, ?);', ('l31x', 4))  # also with L2 = l21 but L1 != l11
+
+        qs = L3.qs.filter(l21__l11__title='l11').select_related('l21')
+        result = qs.all()
+        assert len(result) == 2
+
+        assert result[0].title == 'l31'
+        assert result[0].l21.title == 'l21'
+        assert result[0].l21.l11 == 1
+
+        assert result[1].title == 'l311'
+        assert result[1].l21.title == 'l211'
+        assert result[1].l21.l11 == 1
+
     def test_update(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('John', 19))
 
@@ -66,7 +172,7 @@ class TestQueryExpression:
         assert results[0][1] == 42
 
     def test_update_filter(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 5), ('z', 1)])
 
@@ -80,7 +186,7 @@ class TestQueryExpression:
 
     def test_create(self, test_model):
         test_model.qs.create(name='Vasya', age=19)
-        with test_model.db.cursor() as c:
+        with test_model._meta.db.cursor() as c:
             c.execute('SELECT * FROM person WHERE id = ?;', (1,))
             results = c.fetchall()
         assert results
@@ -88,7 +194,7 @@ class TestQueryExpression:
     def test_update_with_fk(self, related_models):
         model_with_fk, external_model = related_models
 
-        db = external_model.db
+        db = external_model._meta.db
 
         with db.cursor() as c:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
@@ -105,7 +211,7 @@ class TestQueryExpression:
         assert results
 
     def test_delete(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 7), ('z', 6)])
 
@@ -117,7 +223,7 @@ class TestQueryExpression:
         assert len(rows) == 1
 
     def test_get(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
 
         with db.cursor() as c:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
@@ -128,7 +234,7 @@ class TestQueryExpression:
         assert instance.age == 3
 
     def test_get_does_not_exists(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
 
@@ -136,7 +242,7 @@ class TestQueryExpression:
             test_model.qs.get(id=9000)
 
     def test_get_multiple_result(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 10), ('y', 10)])
 
@@ -144,7 +250,7 @@ class TestQueryExpression:
             test_model.qs.get(age=10)
 
     def test_first(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
@@ -160,7 +266,7 @@ class TestQueryExpression:
         assert not instance
 
     def test_all(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
@@ -184,7 +290,7 @@ class TestQueryExpression:
         result = test_model.qs.bulk_create([instance1, instance2, 'foobar'])
         assert result == 2
 
-        db = test_model.db
+        db = test_model._meta.db
 
         with db.cursor() as c:
             c.execute('SELECT * FROM person WHERE name = ? AND age = ?;', ('John', 33))
@@ -199,7 +305,7 @@ class TestQueryExpression:
     def test_select_related(self, related_models):
         model_with_fk, external_model = related_models
 
-        db = external_model.db
+        db = external_model._meta.db
         with db.cursor() as c:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
             c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('y', 1))
@@ -216,10 +322,97 @@ class TestQueryExpression:
         assert result.author.name == 'x'
         assert result.author.age == 3
 
+    def test_select_related_multiple(self, test_db):
+
+        class L11(Model):
+            title = CharField(max_length=100)
+
+        class L21(Model):
+            title = CharField(max_length=100)
+            l11 = ForeignKey(L11)
+
+        class L22(Model):
+            title = CharField(max_length=100)
+            l11 = ForeignKey(L11, null=True)
+
+        class L31(Model):
+            title = CharField(max_length=100)
+            l21 = ForeignKey(L21)
+            l22 = ForeignKey(L22)
+            l21_other = ForeignKey(L21, column_name='l21_other')
+
+        L11.create_table()
+        L21.create_table()
+        L22.create_table()
+        L31.create_table()
+
+        with test_db.cursor() as c:
+            c.execute('INSERT INTO L11 (title) VALUES (?);', ('l11',))
+            c.execute('INSERT INTO L21 (title, l11_id) VALUES (?, ?);', ('l20', 1))
+            c.execute('INSERT INTO L22 (title) VALUES (?);', ('l2x',))
+            c.execute('INSERT INTO L22 (title) VALUES (?);', ('l2y',))
+            c.execute('INSERT INTO L22 (title, l11_id) VALUES (?, ?);', ('l22', 1))
+            c.execute('INSERT INTO L21 (title, l11_id) VALUES (?, ?);', ('l21', 1))
+            c.execute('INSERT INTO L31 (title, l21_id, l21_other, l22_id) VALUES (?, ?, ?, ?);', ('l31', 2, 1, 3))
+
+        qs = L31.qs.select_related('l21__l11', 'l22')
+        instance = qs.first()
+
+        assert instance.pk == 1
+        assert instance.title == 'l31'
+        assert instance.l21.pk == 2
+        assert instance.l21.title == 'l21'
+        assert instance.l21.l11.pk == 1
+        assert instance.l21.l11.title == 'l11'
+
+        assert instance.l21_other == 1
+        assert instance.l22.pk == 3
+        assert instance.l22.title == 'l22'
+        assert instance.l22.l11 == 1
+
+    def test_values_multiple_relations(self, test_db):
+
+        class L11(Model):
+            title = CharField(max_length=100)
+            text = CharField(max_length=200)
+
+        class L21(Model):
+            title = CharField(max_length=100)
+            l11 = ForeignKey(L11)
+
+        class L22(Model):
+            title = CharField(max_length=100)
+
+        class L31(Model):
+            title = CharField(max_length=100)
+            l21 = ForeignKey(L21)
+            l22 = ForeignKey(L22)
+
+        L11.create_table()
+        L21.create_table()
+        L22.create_table()
+        L31.create_table()
+
+        with test_db.cursor() as c:
+            c.execute('INSERT INTO L11 (title, text) VALUES (?, ?);', ('l11', "FOOBAR"))
+            c.execute('INSERT INTO L21 (title, l11_id) VALUES (?, ?);', ('l20', 1))
+            c.execute('INSERT INTO L22 (title) VALUES (?);', ('l2x',))
+            c.execute('INSERT INTO L22 (title) VALUES (?);', ('l2y',))
+            c.execute('INSERT INTO L22 (title) VALUES (?);', ('l22',))
+            c.execute('INSERT INTO L21 (title, l11_id) VALUES (?, ?);', ('l21', 1))
+            c.execute('INSERT INTO L31 (title, l21_id, l22_id) VALUES (?, ?, ?);', ('l31', 2, 3))
+
+        qs = L31.qs.values('l21__l11__text', 'title', 'l22__title', 'l22')
+        instance = qs.first()
+        assert instance['l21__l11__text'] == "FOOBAR"
+        assert instance['title'] == 'l31'
+        assert instance['l22__title'] == 'l22'
+        assert instance['l22'] == 3
+
     def test_select_related_namedtuple(self, related_models):
         model_with_fk, external_model = related_models
 
-        db = external_model.db
+        db = external_model._meta.db
 
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('foo', 18), ('bar', 19)])
@@ -240,7 +433,7 @@ class TestQueryExpression:
         assert results[2].author.age == 18
 
     def test_limit(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
@@ -252,7 +445,7 @@ class TestQueryExpression:
         assert results[1].id == 2
 
     def test_index(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
@@ -262,7 +455,7 @@ class TestQueryExpression:
         assert result.name == 'z'
 
     def test_values(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
@@ -283,7 +476,7 @@ class TestQueryExpression:
     def test_values_select_related(self, related_models):
         model_with_fk, external_model = related_models
 
-        db = external_model.db
+        db = external_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('foo', 18), ('bar', 19)])
             c.executemany('INSERT INTO book (title, person_id) VALUES (?, ?);', [('a', 1), ('b', 2), ('c', 1)])
@@ -301,7 +494,7 @@ class TestQueryExpression:
         assert result[2]["author__name"] == 'foo'
 
     def test_exists(self, test_model):
-        db = test_model.db
+        db = test_model._meta.db
         with db.cursor() as c:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
 

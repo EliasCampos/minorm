@@ -191,7 +191,7 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
     .. code:: python
 
         person = Person.qs.get(id=7)  # model instance object
-        book = Book.qs.get(pk=7)  # you could use `pk` instead of primary key name
+        book = Book.qs.get(pk=7)  # you could use `pk` instead of pk field name
 
     raises :code:`Model.DoesNotExists` if corresponding row not found in db,
     and :code:`MultipleQueryResult` if more than one row matches query filters.

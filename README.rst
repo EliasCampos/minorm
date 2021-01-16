@@ -241,7 +241,7 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
     .. code:: python
 
         for book in Book.qs.select_related('author').all():
-            author = book.author  # without select_related call, author attribute is fk ID
+            author = book.author  # without select_related call, each author will hit db
             print(book.title, author.name)
 
 TODO

@@ -196,7 +196,7 @@ class ForeignKey(Field):
         fetched_instance = getattr(instance, self.fetched_instance_attr, None)
         if not isinstance(fetched_instance, self.to):
             raw_fk_value = getattr(instance, self.raw_fk_attr)
-            fetched_instance = self.to.qs.get(**{self.to._meta.pk_field.name: raw_fk_value})
+            fetched_instance = self.to.qs.get(pk=raw_fk_value)
             setattr(instance, self.fetched_instance_attr, fetched_instance)
         return fetched_instance
 

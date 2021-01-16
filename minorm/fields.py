@@ -195,6 +195,9 @@ class ForeignKey(Field):
     def __get__(self, instance, owner):
         if not hasattr(instance, self.cached_instance_attr):
             raw_fk_value = getattr(instance, self.raw_fk_attr)
+            if raw_fk_value is None:
+                return None
+
             fetched_instance = self.to.qs.get(pk=raw_fk_value)
             setattr(instance, self.cached_instance_attr, fetched_instance)
 

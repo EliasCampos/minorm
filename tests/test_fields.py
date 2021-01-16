@@ -140,3 +140,15 @@ class TestForeignKey:
         author = instance.author  # should perform db query
         assert author.id == 1
         assert author.name == 'foo'
+
+    def test_get_no_fk_value(self, related_models):
+        model_with_fk, external_model = related_models
+        db = external_model._meta.db
+
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('foo', 10))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('a', 1))
+
+        instance = model_with_fk(id=1)  # fk value not passed
+        author = instance.author
+        assert author is None

@@ -253,9 +253,8 @@ class QuerySet:
         return self.all()[item]
 
     def _where_action(self, *args, **kwargs):
-        where_conds = self._check_pk_lookups(kwargs)
-        where_conds.extend(args)
-
+        kwargs = self._check_pk_lookups(kwargs)
+        where_conds = list(args)
         for key, value in kwargs.items():
             field_part, lookup = WhereCondition.resolve_lookup(key)
             *rel_lookups, field_name = field_part.split(LOOKUP_SEPARATOR)
@@ -298,23 +297,17 @@ class QuerySet:
         return results
 
     def _check_pk_lookups(self, kwargs):
-        conds = []
-        lookups = set()
-
-        pk_prefix = f'{self.model._meta.pk_field.name}__'
+        pk_field_name = self.model._meta.pk_field.name
+        result = {}
         for key, value in kwargs.items():
-            if not key.startswith(pk_prefix):
-                continue
+            if key == 'pk' or key.startswith('pk__'):
+                new_key = pk_field_name if key == 'pk' else f'{pk_field_name}{key[2:]}'
+            else:
+                new_key = key
 
-            _, lookup = WhereCondition.resolve_lookup(key)
-            where_cond = WhereCondition.for_lookup(self.model._meta.pk_field.query_name, lookup, value)
-            conds.append(where_cond)
-            lookups.add(key)
+            result[new_key] = value
 
-        for lookup in lookups:
-            del kwargs[lookup]
-
-        return conds
+        return result
 
     def _instance_from_row(self, row, is_namedtuple=False):
         instance, __ = self._related.row_to_instance(row, is_namedtuple=is_namedtuple)

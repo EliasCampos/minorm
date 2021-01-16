@@ -55,6 +55,30 @@ class TestQuerySet:
         assert result is query
         assert result._order_by == {OrderByExpression('person.age', 'DESC'), OrderByExpression('person.name', 'ASC')}
 
+    def test_filter_by_pk(self, test_model):
+        qs1 = test_model.qs.filter(pk=1)
+        assert str(qs1._where) == 'person.id = {0}'
+        assert qs1._where.values() == (1,)
+
+        qs2 = test_model.qs.filter(pk__in=(1, 2))
+        assert str(qs2._where) == 'person.id IN ({0}, {0})'
+        assert qs2._where.values() == (1, 2)
+
+    def test_filter_by_pk_db_hit(self, test_model):
+        db = test_model._meta.db
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('A', 11))
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('B', 12))
+
+        qs1 = test_model.qs.filter(pk=1)
+        assert len(qs1.all()) == 1
+
+        qs2 = test_model.qs.filter(pk__in=(1, 2))
+        assert len(qs2.all()) == 2
+
+        qs3 = test_model.qs.filter(pk=42)
+        assert not qs3.all()
+
     def test_filter_fk_fields(self, related_models):
         model_with_fk, external_model = related_models
 

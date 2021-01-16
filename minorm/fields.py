@@ -190,20 +190,20 @@ class ForeignKey(Field):
     def __set__(self, instance, value):
         setattr(instance, self.raw_fk_attr, self.to_query_parameter(value))
         if isinstance(value, self.to):
-            setattr(instance, self.fetched_instance_attr, value)
+            setattr(instance, self.cached_instance_attr, value)
 
     def __get__(self, instance, owner):
-        fetched_instance = getattr(instance, self.fetched_instance_attr, None)
-        if not isinstance(fetched_instance, self.to):
+        if not hasattr(instance, self.cached_instance_attr):
             raw_fk_value = getattr(instance, self.raw_fk_attr)
             fetched_instance = self.to.qs.get(pk=raw_fk_value)
-            setattr(instance, self.fetched_instance_attr, fetched_instance)
-        return fetched_instance
+            setattr(instance, self.cached_instance_attr, fetched_instance)
+
+        return getattr(instance, self.cached_instance_attr)
 
     @property
     def raw_fk_attr(self):
         return f'{self.name}_id'
 
     @property
-    def fetched_instance_attr(self):
+    def cached_instance_attr(self):
         return f'_{self.name}_cached'

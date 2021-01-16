@@ -257,6 +257,16 @@ class TestQuerySet:
         assert instance.name == 'x'
         assert instance.age == 3
 
+    def test_get_by_pk(self, test_model):
+        db = test_model._meta.db
+
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
+
+        instance = test_model.qs.get(pk=1)
+        assert instance.pk == 1
+        assert instance.name == 'x'
+
     def test_get_does_not_exists(self, test_model):
         db = test_model._meta.db
         with db.cursor() as c:

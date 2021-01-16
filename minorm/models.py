@@ -139,6 +139,9 @@ class Model(metaclass=ModelMetaclass):
             value = kwargs.get(field_name, field.get_default())
             setattr(self, field_name, value)
 
+            if isinstance(field, ForeignKey) and field.raw_fk_attr in kwargs:
+                setattr(self, field.raw_fk_attr, kwargs[field.raw_fk_attr])  # replace {fk}_id by provided argument
+
     @property
     def pk(self):
         return getattr(self, self.__class__._meta.pk_field.name)
@@ -163,7 +166,7 @@ class Model(metaclass=ModelMetaclass):
             where=where_cond,
         )
         raw_sql = query.render_sql(model._meta.db.spec)
-        query_params = [getattr(self, field.name) for field in modified_fields]
+        query_params = [field.to_query_parameter(getattr(self, field.name)) for field in modified_fields]
         if where_cond:
             query_params.extend(where_cond.values())
         with model._meta.db.cursor() as curr:

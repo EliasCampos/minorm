@@ -365,10 +365,10 @@ class TestQuerySet:
         assert instance.l21.l11.pk == 1
         assert instance.l21.l11.title == 'l11'
 
-        assert instance.l21_other == 1
+        assert instance.l21_other_id == 1
         assert instance.l22.pk == 3
         assert instance.l22.title == 'l22'
-        assert instance.l22.l11 == 1
+        assert instance.l22.l11_id == 1
 
     def test_values_multiple_relations(self, test_db):
 

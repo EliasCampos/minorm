@@ -110,3 +110,33 @@ class TestForeignKey:
     def test_column_name(self, test_model):
         fk = ForeignKey(to=test_model, null=False)
         assert fk.column_name == "person_id"  # table name is from model fixture
+
+    def test_set_related_obj(self, related_models):
+        model_with_fk, external_model = related_models
+
+        author = external_model(id=1)
+        book = model_with_fk(id=1)
+        book.author = author
+        assert book.author_id == 1
+        assert book._author_cached is author
+
+    def test_set_raw_fk(self, related_models):
+        model_with_fk, external_model = related_models
+
+        book = model_with_fk(id=1)
+        assert book.author_id is None
+        book.author = 1
+        assert book.author_id == 1
+
+    def test_get(self, related_models):
+        model_with_fk, external_model = related_models
+        db = external_model._meta.db
+
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('foo', 10))
+            c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('a', 1))
+
+        instance = model_with_fk(id=1, author_id=1)
+        author = instance.author  # should perform db query
+        assert author.id == 1
+        assert author.name == 'foo'

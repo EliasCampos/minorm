@@ -55,6 +55,30 @@ class TestQuerySet:
         assert result is query
         assert result._order_by == {OrderByExpression('person.age', 'DESC'), OrderByExpression('person.name', 'ASC')}
 
+    def test_filter_by_pk(self, test_model):
+        qs1 = test_model.qs.filter(pk=1)
+        assert str(qs1._where) == 'person.id = {0}'
+        assert qs1._where.values() == (1,)
+
+        qs2 = test_model.qs.filter(pk__in=(1, 2))
+        assert str(qs2._where) == 'person.id IN ({0}, {0})'
+        assert qs2._where.values() == (1, 2)
+
+    def test_filter_by_pk_db_hit(self, test_model):
+        db = test_model._meta.db
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('A', 11))
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('B', 12))
+
+        qs1 = test_model.qs.filter(pk=1)
+        assert len(qs1.all()) == 1
+
+        qs2 = test_model.qs.filter(pk__in=(1, 2))
+        assert len(qs2.all()) == 2
+
+        qs3 = test_model.qs.filter(pk=42)
+        assert not qs3.all()
+
     def test_filter_fk_fields(self, related_models):
         model_with_fk, external_model = related_models
 
@@ -233,6 +257,16 @@ class TestQuerySet:
         assert instance.name == 'x'
         assert instance.age == 3
 
+    def test_get_by_pk(self, test_model):
+        db = test_model._meta.db
+
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
+
+        instance = test_model.qs.get(pk=1)
+        assert instance.pk == 1
+        assert instance.name == 'x'
+
     def test_get_does_not_exists(self, test_model):
         db = test_model._meta.db
         with db.cursor() as c:
@@ -365,10 +399,10 @@ class TestQuerySet:
         assert instance.l21.l11.pk == 1
         assert instance.l21.l11.title == 'l11'
 
-        assert instance.l21_other == 1
+        assert instance.l21_other_id == 1
         assert instance.l22.pk == 3
         assert instance.l22.title == 'l22'
-        assert instance.l22.l11 == 1
+        assert instance.l22.l11_id == 1
 
     def test_values_multiple_relations(self, test_db):
 

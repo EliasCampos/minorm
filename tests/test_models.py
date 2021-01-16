@@ -174,7 +174,8 @@ class TestModel:
         book.save()
 
         assert book.pk == 1
-        assert book.author == author.pk
+        assert book.author_id == author.pk
+        assert book._author_cached is author
 
     def test_refresh_from_db(self, test_model):
         instance = test_model(name="john", age=33)

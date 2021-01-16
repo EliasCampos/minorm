@@ -183,6 +183,7 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
     .. code:: python
 
         Person.qs.filter(name="mike").exists()  # True if there is such name, otherwise False
+        Book.qs.exists()  # check if there is at least one row in the table
 
 :code:`get(**lookups)`:
     Get single row as an instance of the model class:
@@ -190,6 +191,7 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
     .. code:: python
 
         person = Person.qs.get(id=7)  # model instance object
+        book = Book.qs.get(pk=7)  # you could use `pk` instead of pk field name
 
     raises :code:`Model.DoesNotExists` if corresponding row not found in db,
     and :code:`MultipleQueryResult` if more than one row matches query filters.
@@ -241,7 +243,7 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
     .. code:: python
 
         for book in Book.qs.select_related('author').all():
-            author = book.author  # without select_related call, author attribute is fk ID
+            author = book.author  # without select_related call, each author will hit db
             print(book.title, author.name)
 
 TODO

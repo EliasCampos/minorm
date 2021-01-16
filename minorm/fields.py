@@ -186,3 +186,24 @@ class ForeignKey(Field):
         ref_pk_field = self.to._meta.pk_field
         fk_type = 'INTEGER' if isinstance(ref_pk_field, AutoField) else ref_pk_field.render_sql_type()
         return f'{fk_type} REFERENCES {self.to._meta.table_name} ({ref_pk_field.name})'
+
+    def __set__(self, instance, value):
+        setattr(instance, self.raw_fk_attr, self.to_query_parameter(value))
+        if isinstance(value, self.to):
+            setattr(instance, self.cached_instance_attr, value)
+
+    def __get__(self, instance, owner):
+        if not hasattr(instance, self.cached_instance_attr):
+            raw_fk_value = getattr(instance, self.raw_fk_attr)
+            fetched_instance = self.to.qs.get(pk=raw_fk_value)
+            setattr(instance, self.cached_instance_attr, fetched_instance)
+
+        return getattr(instance, self.cached_instance_attr)
+
+    @property
+    def raw_fk_attr(self):
+        return f'{self.name}_id'
+
+    @property
+    def cached_instance_attr(self):
+        return f'_{self.name}_cached'

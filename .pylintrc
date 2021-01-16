@@ -1,6 +1,10 @@
 [FORMAT]
 max-line-length = 120
 
+[DESIGN]
+max-args = 7
+min-public-methods = 1
+
 [SIMILARITIES]
 min-similarity-lines = 6
 
@@ -10,14 +14,10 @@ generated-members = _meta
 [VARIABLES]
 dummy-variables-rgx = _|__|dummy
 
+[CLASSES]
+exclude-protected= _meta
+
 [MESSAGES CONTROL]
 disable =
     missing-docstring,
     invalid-name
-
-[CLASSES]
-exclude-protected= _meta
-
-[DESIGN]
-max-args = 7
-min-public-methods = 1

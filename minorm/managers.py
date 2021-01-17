@@ -19,6 +19,9 @@ class QuerySet:
         self._related = RelationNode(base_model=self.model)
         self._values_mapping = OrderedDict()
 
+    def all(self):
+        return self._clone()
+
     def filter(self, **kwargs):
         where_cond = self._where_action(**kwargs)
         self._reset_where(where_cond, operator.and_)
@@ -36,16 +39,36 @@ class QuerySet:
             self._order_by.add(OrderByExpression(value=field.query_name, ordering=order_exp.ordering))
         return self._clone()
 
+    def values(self, *args):
+        if len(args) == 1 and args[0] is None:
+            self._values_mapping = OrderedDict()
+        else:
+            for lookup in args:
+                val_parts = lookup.split(LOOKUP_SEPARATOR)
+                *relation_lookup, field_name = val_parts
+                if relation_lookup:
+                    relation = self._related.resolve_relation(relation_lookup)
+                else:
+                    relation = self._related
+
+                field = relation.model._meta.check_field(field_name, with_pk=True)
+                self._values_mapping[lookup] = f'{relation.table_shortcut}.{field.column_name}'
+
+        return self._clone()
+
     def select_related(self, *args):
         if len(args) == 1 and args[0] is None:
             self._related = RelationNode(base_model=self.model)
-            return self
-
-        for lookup in args:
-            lookup_parts = lookup.split(LOOKUP_SEPARATOR)
-            self._related.resolve_relation(lookup_parts, is_selected=True)
+        else:
+            for lookup in args:
+                lookup_parts = lookup.split(LOOKUP_SEPARATOR)
+                self._related.resolve_relation(lookup_parts, is_selected=True)
 
         return self._clone()
+
+    def fetch(self):
+        rows = self._fetch_all()
+        return [self._instance_from_row(row, is_namedtuple=True) for row in rows]
 
     def update(self, **kwargs):
         update_data = OrderedDict()
@@ -79,7 +102,6 @@ class QuerySet:
         return instance
 
     def get(self, **kwargs):
-        self._values_mapping = {}
         self._limit = 2
         results = self._fetch_all(**kwargs)
         if not results:
@@ -95,40 +117,33 @@ class QuerySet:
         if not row:
             return None
 
-        if self._values_mapping:
-            return self._dict_from_row(row)
         return self._instance_from_row(row)
 
-    def all(self):
-        extracted = self._fetch_all()
-        if self._values_mapping:
-            return [self._dict_from_row(row) for row in extracted]
-        return [self._instance_from_row(row, is_namedtuple=True) for row in extracted]
-
-    def values(self, *args):
-        if len(args) == 1 and args[0] is None:
-            self._values_mapping = OrderedDict()
-        else:
-            for lookup in args:
-                val_parts = lookup.split(LOOKUP_SEPARATOR)
-                *relation_lookup, field_name = val_parts
-                if relation_lookup:
-                    relation = self._related.resolve_relation(relation_lookup)
-                else:
-                    relation = self._related
-
-                field = relation.model._meta.check_field(field_name, with_pk=True)
-                self._values_mapping[lookup] = f'{relation.table_shortcut}.{field.column_name}'
-
-        return self._clone()
-
     def exists(self):
-        self.select_related(None)
-        self.values(self.model._meta.pk_field.column_name)
-        self._limit = 1
-
-        is_exists = bool(self._fetch_all())
+        qs = self.select_related(None).values(self.model._meta.pk_field.column_name)[:1]
+        is_exists = bool(qs._fetch_one())  # pylint: disable=protected-access
         return is_exists
+
+    def __iter__(self):
+        raw_sql, params = self._prepare_sql()
+        with self.model._meta.db.cursor() as curr:
+            curr.execute(raw_sql, params)
+            for row in curr:
+                yield self._instance_from_row(row)
+
+    def __getitem__(self, item):
+        if not any(isinstance(item, supported_type) for supported_type in (int, slice)):
+            raise TypeError(f'{self.__class__.__name__} indices must be integers or slices.')
+
+        if isinstance(item, slice):
+            self._limit = item.stop
+            return self._clone()
+
+        fetched_items = tuple(self)
+        try:
+            return fetched_items[item]
+        except IndexError:
+            raise IndexError(f'{self.__class__.__name__} index out of range')
 
     def bulk_create(self, instances):
         model = self.model
@@ -157,16 +172,6 @@ class QuerySet:
     @property
     def query_params(self):
         return self._where.values() if self._where else ()
-
-    def __getitem__(self, item):
-        if not any(isinstance(item, supported_type) for supported_type in (int, slice)):
-            raise TypeError(f'{self.__class__.__name__} indices must be integers or slices.')
-
-        if isinstance(item, slice):
-            self._limit = item.stop
-            return self
-
-        return self.all()[item]
 
     # pylint: disable=protected-access
     def _clone(self):
@@ -224,8 +229,10 @@ class QuerySet:
         return result
 
     def _prepare_sql(self, **extra_lookups):
-        where_cond = self._where_action(**extra_lookups)
-        self._reset_where(where_cond, operator.and_)
+        if extra_lookups:
+            where_cond = self._where_action(**extra_lookups)
+            self._reset_where(where_cond, operator.and_)
+
         select_query = self.query
         raw_sql = select_query.render_sql(self.model._meta.db.spec)
         params = self.query_params
@@ -245,11 +252,11 @@ class QuerySet:
         return result
 
     def _instance_from_row(self, row, is_namedtuple=False):
+        if self._values_mapping:
+            return dict(zip(self._values_mapping, row))
+
         instance, __ = self._related.row_to_instance(row, is_namedtuple=is_namedtuple)
         return instance
-
-    def _dict_from_row(self, row):
-        return dict(zip(self._values_mapping, row))
 
 
 class RelationNode:

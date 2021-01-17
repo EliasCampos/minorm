@@ -68,13 +68,13 @@ class TestQuerySet:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('B', 12))
 
         qs1 = test_model.qs.filter(pk=1)
-        assert len(qs1.all()) == 1
+        assert len(qs1.fetch()) == 1
 
         qs2 = test_model.qs.filter(pk__in=(1, 2))
-        assert len(qs2.all()) == 2
+        assert len(qs2.fetch()) == 2
 
         qs3 = test_model.qs.filter(pk=42)
-        assert not qs3.all()
+        assert not qs3.fetch()
 
     def test_filter_fk_fields(self, related_models):
         model_with_fk, external_model = related_models
@@ -91,7 +91,7 @@ class TestQuerySet:
             c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('c', 3))
 
         qs = model_with_fk.qs.filter(author__name__in=('A', 'B'), author__age__gte=18)
-        results = qs.all()
+        results = qs.fetch()
         assert len(results) == 2
         assert results[0].title == 'b'
         assert results[0].author == 2
@@ -113,7 +113,7 @@ class TestQuerySet:
             c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('c', 3))
 
         qs = model_with_fk.qs.filter(author__name='A').aswell(author__age__gt=18)
-        results = qs.all()
+        results = qs.fetch()
         assert len(results) == 2
         assert results[0].title == 'a'
         assert results[0].author == 1
@@ -133,7 +133,7 @@ class TestQuerySet:
             c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('b', 2))
 
         qs = model_with_fk.qs.filter(title='a').filter(author__name='A')
-        results = qs.all()
+        results = qs.fetch()
         assert len(results) == 1
         assert results[0].title == 'a'
         assert results[0].author == 1
@@ -169,7 +169,7 @@ class TestQuerySet:
             c.execute('INSERT INTO L3 (title, l2_id) VALUES (?, ?);', ('l31x', 4))  # also with L2 = l21 but L1 != l11
 
         qs = L3.qs.filter(l21__l11__title='l11').select_related('l21')
-        result = qs.all()
+        result = qs.fetch()
         assert len(result) == 2
 
         assert result[0].title == 'l31'
@@ -264,6 +264,15 @@ class TestQuerySet:
         assert instance.pk == 1
         assert instance.name == 'x'
 
+    def test_get_values(self, test_model):
+        db = test_model._meta.db
+
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
+
+        instance = test_model.qs.values('name', 'age').get(id=1)
+        assert instance == {'name': 'x', 'age': 3}
+
     def test_get_does_not_exists(self, test_model):
         db = test_model._meta.db
         with db.cursor() as c:
@@ -296,12 +305,12 @@ class TestQuerySet:
         instance = test_model.qs.filter(age=9000).first()
         assert not instance
 
-    def test_all(self, test_model):
+    def test_fetch(self, test_model):
         db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
-        results = test_model.qs.all()
+        results = test_model.qs.fetch()
         assert results[0].id == 1
         assert results[0].name == 'x'
         assert results[0].age == 3
@@ -313,6 +322,24 @@ class TestQuerySet:
         assert results[2].id == 3
         assert results[2].name == 'z'
         assert results[2].age == 6
+
+    def test_iter(self, test_model):
+        db = test_model._meta.db
+        with db.cursor() as c:
+            c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 20), ('y', 16), ('z', 19)])
+
+        qs = test_model.qs.filter(age__gte=18)
+        qs_iter = iter(qs)
+        result = next(qs_iter)
+        assert result.id == 1
+        assert result.name == 'x'
+        assert result.age == 20
+        assert isinstance(result, test_model)
+
+        result = next(qs_iter)
+        assert result.id == 3
+        assert result.name == 'z'
+        assert result.age == 19
 
     def test_bulk_create(self, test_model):
         instance1 = test_model(name='John', age=33)
@@ -447,7 +474,7 @@ class TestQuerySet:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('foo', 18), ('bar', 19)])
             c.executemany('INSERT INTO book (title, person_id) VALUES (?, ?);', [('a', 1), ('b', 2), ('c', 1)])
 
-        results = model_with_fk.qs.select_related('author').all()
+        results = model_with_fk.qs.select_related('author').fetch()
 
         assert results[0].author.id == 1
         assert results[0].author.name == 'foo'
@@ -466,7 +493,7 @@ class TestQuerySet:
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
-        results = test_model.qs[:2].all()
+        results = test_model.qs[:2].fetch()
 
         assert len(results) == 2
 
@@ -478,17 +505,23 @@ class TestQuerySet:
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
-        result = test_model.qs.filter(id__in=[2, 3])[1]
+        result = test_model.qs.filter(id__in=[1, 2])[1]
+        assert result.id == 2
+        assert result.name == 'y'
 
-        assert result.id == 3
-        assert result.name == 'z'
+        last_result = test_model.qs[-1]
+        assert last_result.id == 3
+
+    def test_index_out_of_range(self, test_model):
+        with pytest.raises(IndexError, match=r'^QuerySet\s+index\s+out\s+of\s+range$'):
+            test_model.qs[9000]
 
     def test_values(self, test_model):
         db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
-        result = test_model.qs.values('id', 'name').all()
+        result = test_model.qs.values('id', 'name').fetch()
 
         assert result[0]["id"] == 1
         assert result[0]["name"] == 'x'
@@ -510,7 +543,7 @@ class TestQuerySet:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('foo', 18), ('bar', 19)])
             c.executemany('INSERT INTO book (title, person_id) VALUES (?, ?);', [('a', 1), ('b', 2), ('c', 1)])
 
-        result = model_with_fk.qs.select_related('author').values('title', 'author__name').all()
+        result = model_with_fk.qs.select_related('author').values('title', 'author__name').fetch()
         assert result[0]["title"] == 'a'
         assert result[0]["author__name"] == 'foo'
         assert 'id' not in result[0]
@@ -532,3 +565,9 @@ class TestQuerySet:
 
         assert not test_model.qs.filter(name='foobar').exists()
         assert not test_model.qs.filter(age=13).exists()
+
+    def test_exists_qs_attributes(self, test_model):
+        qs = test_model.qs
+        qs.exists()
+        assert not qs._values_mapping  # should not change attributes of the queryset
+        assert not qs._limit

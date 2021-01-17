@@ -9,7 +9,7 @@ def test_rollback(test_model):
         transaction.rollback()
         test_model.qs.create(name="bar", age=11)
 
-    results = test_model.qs.all()
+    results = test_model.qs.fetch()
     assert len(results) == 1
     assert results[0].name == "bar"
 
@@ -24,6 +24,6 @@ def test_commit(test_model):
         test_model.qs.create(name="bar", age=11)
         db._connection.rollback()
 
-    results = test_model.qs.all()
+    results = test_model.qs.fetch()
     assert len(results) == 1
     assert results[0].name == "foo"

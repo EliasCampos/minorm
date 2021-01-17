@@ -116,27 +116,6 @@ Queryset methods
 ****************
 Use queryset, accessible by model's :code:`qs` property, to perform db operations on multiple rows:
 
-:code:`all()`:
-    Get all rows as a list of namedtuple objects:
-
-    .. code:: python
-
-        persons = Person.qs.all()  # list of namedtuples
-
-    it's possible to limit number of selected rows by using slices:
-
-    .. code:: python
-
-        persons = Person.qs[:3].all()  # list with only three items
-
-:code:`values(*fields)`:
-    Prepare qs to get rows as dictionaries with fields, passed to the method:
-
-    .. code:: python
-
-        values_qs = Book.qs.values('title', 'author__name')  # dicts with this two keys
-        books = values_qs.all()  # this method call will actually hit db, not previous
-
 :code:`filter(**lookups)`:
     Filter query, result will contain only items that matches all lookups:
 
@@ -144,7 +123,6 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
 
         # user type is "member" AND age > 18
         filtered_qs = Person.qs.filter(user_type='member', age__gt=18)
-        result = filtered_qs.all()  # hits db, performs select query
 
     List of supported lookup expressions:
 
@@ -158,8 +136,8 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
 
     .. code:: python
 
-        qs = Book.qs.filter(author__name="Mark Twain", price__lt=42)
-        result = qs.all()  # will perform join of `author` table
+        qs = Book.qs.filter(author__name="Mark Twain")  # will perform join of `author` table
+
 
 :code:`aswell(**lookups)`:
     Make query result to include items that also matches lookups listed in the method:
@@ -176,6 +154,29 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
 
         Book.qs.order_by('created')  # for oldest to newest
         Person.qs.order_by('-id')  # reverse ordering by id
+
+Slicing (limit number of row):
+    it's possible to limit number of selected rows by using slices:
+
+    .. code:: python
+
+        persons = Person.qs[:3]  # will limit results number to 3 items
+
+
+:code:`all()`:
+    Get a copy of the queryset:
+
+    .. code:: python
+
+        qs = Person.qs.filter(age=42)
+        new_qs = qs.all()  # a copy of filtered qs
+
+:code:`values(*fields)`:
+    Prepare qs to get rows as dictionaries with fields, passed to the method:
+
+    .. code:: python
+
+        qs = Book.qs.values('title', 'author__name')  # items will be dicts with this two keys
 
 :code:`exists()`:
     Return boolean, that indicates presence of rows that match filters:
@@ -195,6 +196,23 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
 
     raises :code:`Model.DoesNotExists` if corresponding row not found in db,
     and :code:`MultipleQueryResult` if more than one row matches query filters.
+
+:code:`fetch()`:
+    Get all rows as a list of namedtuple objects:
+
+    .. code:: python
+
+        persons = Person.qs.fetch()  # list of namedtuples
+        adults = Person.qs.filter(age__gte=18).fetch()
+
+Iterating queryset:
+    Queryset supports iterator interface, so it's possible to iterate results:
+
+    .. code:: python
+
+        for adult in Persons.qs.filter(age__gte=18):
+            print(adult.pk, adult.name)  # each item is a model instance
+
 
 :code:`create(**field_values)`:
     Create a new instance in db:
@@ -242,8 +260,9 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
 
     .. code:: python
 
-        for book in Book.qs.select_related('author').all():
-            author = book.author  # without select_related call, each author will hit db
+        for book in Book.qs.select_related('author'):
+            # without select_related call, each related object hits db
+            author = book.author
             print(book.title, author.name)
 
 Transactions support

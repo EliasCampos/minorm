@@ -80,15 +80,15 @@ class WhereCondition:
 
     def __and__(self, other):
         self._and = other
-        return self
+        return self.clone()
 
     def __or__(self, other):
         self._or = other
-        return self
+        return self.clone()
 
     def __invert__(self):
         self._negated = not self._negated
-        return self
+        return self.clone()
 
     @classmethod
     def resolve_lookup(cls, lookup_key):
@@ -115,6 +115,16 @@ class WhereCondition:
             value = like_patterns[lookup].format(value)
 
         return cls(field=field_name, op=op, value=value)
+
+    # pylint: disable=protected-access
+    def clone(self):
+        new_where = self.__class__(field=self.field, op=self.op, value=self.value, no_escape=self.no_escape)
+        if self._and:
+            new_where._and = self._and.clone()
+        if self._or:
+            new_where._or = self._or.clone()
+        new_where._negated = self._negated
+        return new_where
 
 
 class OrderByExpression(namedtuple('OrderByExpression', 'value, ordering')):

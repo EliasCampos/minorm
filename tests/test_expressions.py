@@ -15,9 +15,6 @@ class TestWhereCondition:
         where_cond2 = WhereCondition(field='y', op='=', value='5')
 
         result = where_cond1 & where_cond2
-        assert result is where_cond1
-        assert result._and is where_cond2
-
         assert str(result) == "x = {0} AND y = {0}"
         assert result.values() == ('3', '5')
 
@@ -26,9 +23,6 @@ class TestWhereCondition:
         where_cond2 = WhereCondition(field='y', op='=', value='5')
 
         result = where_cond1 | where_cond2
-        assert result is where_cond1
-        assert result._or is where_cond2
-
         assert str(result) == "x = {0} OR y = {0}"
         assert result.values() == ('3', '5')
 
@@ -70,6 +64,12 @@ class TestWhereCondition:
     def test_resolve_lookup_eq_case(self):
         invalid_lookup = 'foobar'
         assert WhereCondition.resolve_lookup(invalid_lookup) == ('foobar', None)
+
+    def test_clone(self):
+        where = WhereCondition(field='x', op='=', value='3') | WhereCondition(field='y', op='=', value='5')
+        clone_where = where.clone()
+        assert str(clone_where) == str(where)
+        assert clone_where.values() == where.values()
 
 
 class TestOrderByExpression:

@@ -9,50 +9,47 @@ from minorm.models import Model
 class TestQuerySet:
 
     def test_filter_query(self, test_model):
-        query = QuerySet(model=test_model)
+        qs = QuerySet(model=test_model)
 
-        result = query.filter(name='x', age__gt=2)
+        result = qs.filter(name='x', age__gt=2)
 
-        assert result is query
         assert str(result._where) == "person.name = {0} AND person.age > {0}"
         assert result._where.values() == ('x', 2)
 
     def test_filter_contains_query(self, test_model):
-        query = QuerySet(model=test_model)
+        qs = QuerySet(model=test_model)
 
-        result = query.filter(name__contains='foo')
+        result = qs.filter(name__contains='foo')
         assert str(result._where) == "person.name LIKE {0}"
         assert result._where.values() == ('%foo%',)
 
     def test_filter_startswith_query(self, test_model):
-        query = QuerySet(model=test_model)
+        qs = QuerySet(model=test_model)
 
-        result = query.filter(name__startswith='bar')
+        result = qs.filter(name__startswith='bar')
         assert str(result._where) == "person.name LIKE {0}"
         assert result._where.values() == ('bar%',)
 
     def test_filter_endswith_query(self, test_model):
-        query = QuerySet(model=test_model)
+        qs = QuerySet(model=test_model)
 
-        result = query.filter(name__endswith='baz')
+        result = qs.filter(name__endswith='baz')
         assert str(result._where) == "person.name LIKE {0}"
         assert result._where.values() == ('%baz',)
 
     def test_aswell(self, test_model):
-        query = QuerySet(model=test_model)
+        qs = QuerySet(model=test_model)
 
-        result = query.filter(age__in=(3, 4)).aswell(age__lte=5)
+        result = qs.filter(age__in=(3, 4)).aswell(age__lte=5)
 
-        assert result is query
         assert str(result._where) == "person.age IN ({0}, {0}) OR person.age <= {0}"
         assert result._where.values() == (3, 4, 5)
 
     def test_order_by(self, test_model):
-        query = QuerySet(model=test_model)
+        qs = QuerySet(model=test_model)
 
-        result = query.order_by('-age', 'name')
+        result = qs.order_by('-age', 'name')
 
-        assert result is query
         assert result._order_by == {OrderByExpression('person.age', 'DESC'), OrderByExpression('person.name', 'ASC')}
 
     def test_filter_by_pk(self, test_model):
@@ -346,8 +343,6 @@ class TestQuerySet:
 
         qs = model_with_fk.qs
         related_qs = qs.select_related('author')
-
-        assert related_qs is qs
 
         result = related_qs.get(id=1)
 

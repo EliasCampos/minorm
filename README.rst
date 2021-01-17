@@ -9,7 +9,7 @@ What's the point?
 -----------------
 MinORM was designed as minimalistic ORM, to be as simple as possible.
 It's not production-ready solution, rather a proof of concept. The goal is to demonstrate example of an ORM,
-more-less applicable for usage, that could be created with python in a couple of days.
+more-less applicable for usage, that could be created with python in a short term of time.
 
 Usage
 -----

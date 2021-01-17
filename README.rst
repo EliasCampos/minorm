@@ -116,27 +116,6 @@ Queryset methods
 ****************
 Use queryset, accessible by model's :code:`qs` property, to perform db operations on multiple rows:
 
-:code:`all()`:
-    Get all rows as a list of namedtuple objects:
-
-    .. code:: python
-
-        persons = Person.qs.all()  # list of namedtuples
-
-    it's possible to limit number of selected rows by using slices:
-
-    .. code:: python
-
-        persons = Person.qs[:3].all()  # list with only three items
-
-:code:`values(*fields)`:
-    Prepare qs to get rows as dictionaries with fields, passed to the method:
-
-    .. code:: python
-
-        values_qs = Book.qs.values('title', 'author__name')  # dicts with this two keys
-        books = values_qs.all()  # this method call will actually hit db, not previous
-
 :code:`filter(**lookups)`:
     Filter query, result will contain only items that matches all lookups:
 
@@ -177,6 +156,30 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
         Book.qs.order_by('created')  # for oldest to newest
         Person.qs.order_by('-id')  # reverse ordering by id
 
+Slicing (limit number of row):
+    it's possible to limit number of selected rows by using slices:
+
+    .. code:: python
+
+        persons = Person.qs[:3].all()  # list with only three items
+
+
+:code:`all()`:
+    Get a copy of the queryset:
+
+    .. code:: python
+
+        qs = Person.qs.filter(age=42)
+        new_qs = qs.all()  # a copy of filtered qs
+
+:code:`values(*fields)`:
+    Prepare qs to get rows as dictionaries with fields, passed to the method:
+
+    .. code:: python
+
+        values_qs = Book.qs.values('title', 'author__name')  # dicts with this two keys
+        books = values_qs.all()  # this method call will actually hit db, not previous
+
 :code:`exists()`:
     Return boolean, that indicates presence of rows that match filters:
 
@@ -195,6 +198,14 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
 
     raises :code:`Model.DoesNotExists` if corresponding row not found in db,
     and :code:`MultipleQueryResult` if more than one row matches query filters.
+
+:code:`fetch()`:
+    Get all rows as a list of namedtuple objects:
+
+    .. code:: python
+
+        persons = Person.qs.fetch()  # list of namedtuples
+        adults = Person.qs.filter(age__gte=18).fetch()
 
 :code:`create(**field_values)`:
     Create a new instance in db:

@@ -161,7 +161,7 @@ def _get_by_id(lookup_value):
 
 def _display_items_list(qs):
     print(" | ".join(("ID", "Created at", "Title")))
-    for item in qs.all():
+    for item in qs.fetch():
         created_at = datetime.strptime(item.created_at, '%Y-%m-%d %H:%M:%S.%f').strftime("%Y-%m-%d %H:%M")
         title = f'[DONE] {item.title}' if item.is_done else item.title
         print(' | '.join((str(item.id), created_at, title)))

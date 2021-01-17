@@ -36,6 +36,23 @@ class QuerySet:
             self._order_by.add(OrderByExpression(value=field.query_name, ordering=order_exp.ordering))
         return self._clone()
 
+    def values(self, *args):
+        if len(args) == 1 and args[0] is None:
+            self._values_mapping = OrderedDict()
+        else:
+            for lookup in args:
+                val_parts = lookup.split(LOOKUP_SEPARATOR)
+                *relation_lookup, field_name = val_parts
+                if relation_lookup:
+                    relation = self._related.resolve_relation(relation_lookup)
+                else:
+                    relation = self._related
+
+                field = relation.model._meta.check_field(field_name, with_pk=True)
+                self._values_mapping[lookup] = f'{relation.table_shortcut}.{field.column_name}'
+
+        return self._clone()
+
     def select_related(self, *args):
         if len(args) == 1 and args[0] is None:
             self._related = RelationNode(base_model=self.model)
@@ -46,6 +63,12 @@ class QuerySet:
             self._related.resolve_relation(lookup_parts, is_selected=True)
 
         return self._clone()
+
+    def fetch(self):
+        extracted = self._fetch_all()
+        if self._values_mapping:
+            return [self._dict_from_row(row) for row in extracted]
+        return [self._instance_from_row(row, is_namedtuple=True) for row in extracted]
 
     def update(self, **kwargs):
         update_data = OrderedDict()
@@ -99,29 +122,6 @@ class QuerySet:
             return self._dict_from_row(row)
         return self._instance_from_row(row)
 
-    def all(self):
-        extracted = self._fetch_all()
-        if self._values_mapping:
-            return [self._dict_from_row(row) for row in extracted]
-        return [self._instance_from_row(row, is_namedtuple=True) for row in extracted]
-
-    def values(self, *args):
-        if len(args) == 1 and args[0] is None:
-            self._values_mapping = OrderedDict()
-        else:
-            for lookup in args:
-                val_parts = lookup.split(LOOKUP_SEPARATOR)
-                *relation_lookup, field_name = val_parts
-                if relation_lookup:
-                    relation = self._related.resolve_relation(relation_lookup)
-                else:
-                    relation = self._related
-
-                field = relation.model._meta.check_field(field_name, with_pk=True)
-                self._values_mapping[lookup] = f'{relation.table_shortcut}.{field.column_name}'
-
-        return self._clone()
-
     def exists(self):
         self.select_related(None)
         self.values(self.model._meta.pk_field.column_name)
@@ -166,7 +166,7 @@ class QuerySet:
             self._limit = item.stop
             return self
 
-        return self.all()[item]
+        return self.fetch()[item]
 
     # pylint: disable=protected-access
     def _clone(self):

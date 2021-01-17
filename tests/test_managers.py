@@ -68,13 +68,13 @@ class TestQuerySet:
             c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('B', 12))
 
         qs1 = test_model.qs.filter(pk=1)
-        assert len(qs1.all()) == 1
+        assert len(qs1.fetch()) == 1
 
         qs2 = test_model.qs.filter(pk__in=(1, 2))
-        assert len(qs2.all()) == 2
+        assert len(qs2.fetch()) == 2
 
         qs3 = test_model.qs.filter(pk=42)
-        assert not qs3.all()
+        assert not qs3.fetch()
 
     def test_filter_fk_fields(self, related_models):
         model_with_fk, external_model = related_models
@@ -91,7 +91,7 @@ class TestQuerySet:
             c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('c', 3))
 
         qs = model_with_fk.qs.filter(author__name__in=('A', 'B'), author__age__gte=18)
-        results = qs.all()
+        results = qs.fetch()
         assert len(results) == 2
         assert results[0].title == 'b'
         assert results[0].author == 2
@@ -113,7 +113,7 @@ class TestQuerySet:
             c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('c', 3))
 
         qs = model_with_fk.qs.filter(author__name='A').aswell(author__age__gt=18)
-        results = qs.all()
+        results = qs.fetch()
         assert len(results) == 2
         assert results[0].title == 'a'
         assert results[0].author == 1
@@ -133,7 +133,7 @@ class TestQuerySet:
             c.execute('INSERT INTO book (title, person_id) VALUES (?, ?);', ('b', 2))
 
         qs = model_with_fk.qs.filter(title='a').filter(author__name='A')
-        results = qs.all()
+        results = qs.fetch()
         assert len(results) == 1
         assert results[0].title == 'a'
         assert results[0].author == 1
@@ -169,7 +169,7 @@ class TestQuerySet:
             c.execute('INSERT INTO L3 (title, l2_id) VALUES (?, ?);', ('l31x', 4))  # also with L2 = l21 but L1 != l11
 
         qs = L3.qs.filter(l21__l11__title='l11').select_related('l21')
-        result = qs.all()
+        result = qs.fetch()
         assert len(result) == 2
 
         assert result[0].title == 'l31'
@@ -296,12 +296,12 @@ class TestQuerySet:
         instance = test_model.qs.filter(age=9000).first()
         assert not instance
 
-    def test_all(self, test_model):
+    def test_fetch(self, test_model):
         db = test_model._meta.db
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
-        results = test_model.qs.all()
+        results = test_model.qs.fetch()
         assert results[0].id == 1
         assert results[0].name == 'x'
         assert results[0].age == 3
@@ -447,7 +447,7 @@ class TestQuerySet:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('foo', 18), ('bar', 19)])
             c.executemany('INSERT INTO book (title, person_id) VALUES (?, ?);', [('a', 1), ('b', 2), ('c', 1)])
 
-        results = model_with_fk.qs.select_related('author').all()
+        results = model_with_fk.qs.select_related('author').fetch()
 
         assert results[0].author.id == 1
         assert results[0].author.name == 'foo'
@@ -466,7 +466,7 @@ class TestQuerySet:
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
-        results = test_model.qs[:2].all()
+        results = test_model.qs[:2].fetch()
 
         assert len(results) == 2
 
@@ -488,7 +488,7 @@ class TestQuerySet:
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
-        result = test_model.qs.values('id', 'name').all()
+        result = test_model.qs.values('id', 'name').fetch()
 
         assert result[0]["id"] == 1
         assert result[0]["name"] == 'x'
@@ -510,7 +510,7 @@ class TestQuerySet:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('foo', 18), ('bar', 19)])
             c.executemany('INSERT INTO book (title, person_id) VALUES (?, ?);', [('a', 1), ('b', 2), ('c', 1)])
 
-        result = model_with_fk.qs.select_related('author').values('title', 'author__name').all()
+        result = model_with_fk.qs.select_related('author').values('title', 'author__name').fetch()
         assert result[0]["title"] == 'a'
         assert result[0]["author__name"] == 'foo'
         assert 'id' not in result[0]

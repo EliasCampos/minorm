@@ -9,7 +9,7 @@ What's the point?
 -----------------
 MinORM was designed as minimalistic ORM, to be as simple as possible.
 It's not production-ready solution, rather a proof of concept. The goal is to demonstrate example of an ORM,
-more-less applicable for usage, that could be created with python in a couple of days.
+more-less applicable for usage, that could be created with python in a short term of time.
 
 Usage
 -----
@@ -246,12 +246,38 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
             author = book.author  # without select_related call, each author will hit db
             print(book.title, author.name)
 
+Transactions support
+********************
+It's possible to perform multiple model/queryset operations in transaction by using `transaction` module:
+
+.. code:: python
+
+    from minorm import transaction
+
+    with transaction.atomic():
+        # all db operations inside `atomic` block will run in one transaction
+        author = Person.objects.create(name="Steven King", age=19)
+        Book.objects.create(title="The Dark Tower: The Gunslinger", author=author)
+
+It's also possible to manually commit/rollback changes inside transaction block:
+
+.. code:: python
+
+    with transaction.atomic():
+        instance.save()  # instance is set for saving in transaction
+        if want_to_keep:
+            transaction.commit()  # permanently save instance in db
+        else:
+            transaction.rollback()  # remove instance from saving
+
+        # do more stuff if it's required
+
+
 TODO
 ----
 * add more model fields
 * test Postgresql support
 * add basic aggregation functions (SUM, COUNT, etc)
-* add transaction support
 
 Running tests
 -------------

@@ -14,6 +14,7 @@ class TestConnector:
         assert result is connector
         assert connector._connection
         assert connector._db_spec is db_spec
+        assert connector._autocommit
 
     def test_spec(self):
         db_spec = SQLiteSpec(":memory:")
@@ -25,6 +26,16 @@ class TestConnector:
         connector = Connector()
         with pytest.raises(ConnectorError, match=r'[cC]onnect.*'):
             connector.spec
+
+    @pytest.mark.parametrize('autocommit', [True, False])
+    def test_set_autocommit(self, test_db, autocommit):
+        test_db.set_autocommit(autocommit)
+        assert test_db._autocommit == autocommit
+
+    def test_set_autocommit_not_connected(self):
+        connector = Connector()
+        with pytest.raises(ConnectorError, match=r'[cC]onnect.*'):
+            connector.set_autocommit(True)
 
     def test_cursor_not_connected(self):
         connector = Connector()

@@ -11,12 +11,17 @@ class Connector:
     def __init__(self):
         self._connection = None
         self._db_spec = None
+        self._autocommit = False
 
     def connect(self, db_spec):
         self.disconnect()
 
+        self._connection = db_spec.create_connection()
         self._db_spec = db_spec
-        self._connection = self.spec.create_connection()
+        # Python DB API requires autocommit to be turn initially off
+        # but it's not matches SQL standard,
+        # so it's preferable to change the default behaviour:
+        self.set_autocommit(True)
 
         return self
 
@@ -24,22 +29,32 @@ class Connector:
         if self._connection:
             self._connection.close()
             self._connection = None
+
         self._db_spec = None
+        self._autocommit = None
+
+    def set_autocommit(self, autocommit):
+        self.spec.set_autocommit(self.connection, autocommit)
+        self._autocommit = autocommit
 
     @property
     def spec(self):
-        if not self._db_spec:
-            raise ConnectorError(self.NOT_CONNECTED_ERROR)
-
+        self._check_if_connected()
         return self._db_spec
+
+    @property
+    def connection(self):
+        """Return current connection. Will raise exception if no connection was performed."""
+        self._check_if_connected()
+        return self._connection
 
     @contextmanager
     def cursor(self):
+        yield self.connection.cursor()
+
+    def _check_if_connected(self):
         if not self._connection:
             raise ConnectorError(self.NOT_CONNECTED_ERROR)
-
-        with self._connection:
-            yield self._connection.cursor()
 
 
 connector = Connector()

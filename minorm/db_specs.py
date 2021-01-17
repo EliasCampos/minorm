@@ -2,19 +2,29 @@ from decimal import Decimal
 
 
 class BaseSpec:
-    VALUE_ESCAPE = None
-    AUTO_FIELD_TYPE = None
-    AUTO_FIELD_CONSTRAINS = ()
+    """A base class for DB wrapper, to provide common interface for different database implementations."""
+
+    VALUE_ESCAPE = None  # a character which is used as placeholder for sql parameter, to avoid sql injections
+    AUTO_FIELD_TYPE = None  # an sql base type name for auto incremented field
+    AUTO_FIELD_CONSTRAINS = ()  # constrains that auto incremented field should have (ex. 'AUTOINCREMENT')
 
     def __init__(self, connection_url):
         assert self.VALUE_ESCAPE, f"{self.__class__.__name__} should define value escape."
         assert self.AUTO_FIELD_TYPE,  f"{self.__class__.__name__} should define auto field type."
 
         self.connection_url = connection_url
-
         self.db_driver = self.prepare_db_driver()
 
     def prepare_db_driver(self):
+        """
+        Should return a module that implements Python database API interface.
+
+        https://www.python.org/dev/peps/pep-0249/#module-interface
+        """
+        raise NotImplementedError
+
+    def set_autocommit(self, connection, autocommit):
+        """The method should manipulate on connection object to turn on/off auto-commit mode."""
         raise NotImplementedError
 
     def create_connection(self):
@@ -47,11 +57,13 @@ class SQLiteSpec(BaseSpec):
 
         return sqlite3
 
+    def set_autocommit(self, connection, autocommit):
+        connection.isolation_level = None if autocommit else ''
+
 
 class PostgreSQLSpec(BaseSpec):
     VALUE_ESCAPE = '%s'
     AUTO_FIELD_TYPE = "SERIAL"
-    HAS_AUTO_FIELD_AUTO_INCREMENT = False
 
     def prepare_db_driver(self):
         try:
@@ -59,3 +71,6 @@ class PostgreSQLSpec(BaseSpec):
         except ImportError as err:
             raise RuntimeError(f"{self.__class__.__name__} requires psycopg2 to be installed.") from err
         return psycopg2
+
+    def set_autocommit(self, connection, autocommit):
+        connection.autocommit = autocommit

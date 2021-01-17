@@ -123,7 +123,6 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
 
         # user type is "member" AND age > 18
         filtered_qs = Person.qs.filter(user_type='member', age__gt=18)
-        result = filtered_qs.all()  # hits db, performs select query
 
     List of supported lookup expressions:
 
@@ -137,8 +136,8 @@ Use queryset, accessible by model's :code:`qs` property, to perform db operation
 
     .. code:: python
 
-        qs = Book.qs.filter(author__name="Mark Twain", price__lt=42)
-        result = qs.all()  # will perform join of `author` table
+        qs = Book.qs.filter(author__name="Mark Twain")  # will perform join of `author` table
+
 
 :code:`aswell(**lookups)`:
     Make query result to include items that also matches lookups listed in the method:
@@ -161,7 +160,7 @@ Slicing (limit number of row):
 
     .. code:: python
 
-        persons = Person.qs[:3].all()  # list with only three items
+        persons = Person.qs[:3]  # will limit results number to 3 items
 
 
 :code:`all()`:
@@ -177,8 +176,7 @@ Slicing (limit number of row):
 
     .. code:: python
 
-        values_qs = Book.qs.values('title', 'author__name')  # dicts with this two keys
-        books = values_qs.all()  # this method call will actually hit db, not previous
+        qs = Book.qs.values('title', 'author__name')  # items will be dicts with this two keys
 
 :code:`exists()`:
     Return boolean, that indicates presence of rows that match filters:
@@ -263,7 +261,8 @@ Iterating queryset:
     .. code:: python
 
         for book in Book.qs.select_related('author'):
-            author = book.author  # without select_related call, each author will hit db
+            # without select_related call, each related object hits db
+            author = book.author
             print(book.title, author.name)
 
 Transactions support

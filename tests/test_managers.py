@@ -264,6 +264,15 @@ class TestQuerySet:
         assert instance.pk == 1
         assert instance.name == 'x'
 
+    def test_get_values(self, test_model):
+        db = test_model._meta.db
+
+        with db.cursor() as c:
+            c.execute('INSERT INTO person (name, age) VALUES (?, ?);', ('x', 3))
+
+        instance = test_model.qs.values('name', 'age').get(id=1)
+        assert instance == {'name': 'x', 'age': 3}
+
     def test_get_does_not_exists(self, test_model):
         db = test_model._meta.db
         with db.cursor() as c:
@@ -313,6 +322,24 @@ class TestQuerySet:
         assert results[2].id == 3
         assert results[2].name == 'z'
         assert results[2].age == 6
+
+    def test_iter(self, test_model):
+        db = test_model._meta.db
+        with db.cursor() as c:
+            c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 20), ('y', 16), ('z', 19)])
+
+        qs = test_model.qs.filter(age__gte=18)
+        qs_iter = iter(qs)
+        result = next(qs_iter)
+        assert result.id == 1
+        assert result.name == 'x'
+        assert result.age == 20
+        assert isinstance(result, test_model)
+
+        result = next(qs_iter)
+        assert result.id == 3
+        assert result.name == 'z'
+        assert result.age == 19
 
     def test_bulk_create(self, test_model):
         instance1 = test_model(name='John', age=33)
@@ -478,10 +505,16 @@ class TestQuerySet:
         with db.cursor() as c:
             c.executemany('INSERT INTO person (name, age) VALUES (?, ?);', [('x', 3), ('y', 6), ('z', 6)])
 
-        result = test_model.qs.filter(id__in=[2, 3])[1]
+        result = test_model.qs.filter(id__in=[1, 2])[1]
+        assert result.id == 2
+        assert result.name == 'y'
 
-        assert result.id == 3
-        assert result.name == 'z'
+        last_result = test_model.qs[-1]
+        assert last_result.id == 3
+
+    def test_index_out_of_range(self, test_model):
+        with pytest.raises(IndexError, match=r'^QuerySet\s+index\s+out\s+of\s+range$'):
+            test_model.qs[9000]
 
     def test_values(self, test_model):
         db = test_model._meta.db
@@ -532,3 +565,9 @@ class TestQuerySet:
 
         assert not test_model.qs.filter(name='foobar').exists()
         assert not test_model.qs.filter(age=13).exists()
+
+    def test_exists_qs_attributes(self, test_model):
+        qs = test_model.qs
+        qs.exists()
+        assert not qs._values_mapping  # should not change attributes of the queryset
+        assert not qs._limit

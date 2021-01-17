@@ -6,16 +6,19 @@ from minorm.fields import BooleanField, CharField, DateTimeField
 from minorm.models import Model
 
 
-class TodoItem(Model):
-    title = CharField(max_length=120)
-    created_at = DateTimeField(default=datetime.now)
-    is_done = BooleanField(default=False)
-
-
 def main():
     connector.connect(SQLiteSpec('todos.db'))
     init_tables()
 
+    try:
+        run_todo_app()
+    except KeyboardInterrupt:
+        print('\nExiting...')
+    finally:
+        connector.disconnect()
+
+
+def run_todo_app():
     print_description()
 
     commands_with_params = {
@@ -32,13 +35,7 @@ def main():
     }
 
     while True:
-        try:
-            command = input("$")
-        except KeyboardInterrupt:
-            print('\nExiting...')
-            connector.disconnect()
-            return
-
+        command = input("$")
         command_args = command.strip().split(maxsplit=1)
         if not command_args:
             continue
@@ -61,8 +58,19 @@ def main():
                 handler()
 
 
+class TodoItem(Model):
+    title = CharField(max_length=120)
+    created_at = DateTimeField(default=datetime.now)
+    is_done = BooleanField(default=False)
+
+    def __str__(self):
+        title = f'[DONE] {self.title}' if self.is_done else self.title
+        return ' | '.join((str(self.pk), str(self.created_at), title))
+
+
 def add_item(title):
-    if TodoItem.qs.filter(title=title).exists():
+    items_with_same_title = TodoItem.qs.filter(title=title)
+    if items_with_same_title.exists():
         print("WARNING: duplicated one or more items with the title.")
 
     new_item = TodoItem.qs.create(title=title)
@@ -70,18 +78,20 @@ def add_item(title):
 
 
 def list_items():
-    if not TodoItem.qs.exists():
+    todos = TodoItem.qs
+    if not todos.exists():
         print("No todos yet.")
     else:
-        _display_items_list(qs=TodoItem.qs.order_by('created_at'))
+        _display_items(todos.order_by('created_at'))
 
 
 def search_items(title):
-    if not TodoItem.qs.filter(title__contains=title).exists():
+    found_todos = TodoItem.qs.filter(title__contains=title)
+    if not found_todos.exists():
         print("No todos found.")
     else:
         print("Found next todos:")
-        _display_items_list(qs=TodoItem.qs.filter(title__contains=title))
+        _display_items(found_todos)
 
 
 def edit_item(params):
@@ -159,12 +169,10 @@ def _get_by_id(lookup_value):
     return item
 
 
-def _display_items_list(qs):
+def _display_items(items):
     print(" | ".join(("ID", "Created at", "Title")))
-    for item in qs.fetch():
-        created_at = datetime.strptime(item.created_at, '%Y-%m-%d %H:%M:%S.%f').strftime("%Y-%m-%d %H:%M")
-        title = f'[DONE] {item.title}' if item.is_done else item.title
-        print(' | '.join((str(item.id), created_at, title)))
+    for item in items:
+        print(item)
 
 
 def init_tables():

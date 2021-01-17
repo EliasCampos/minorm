@@ -207,6 +207,15 @@ Slicing (limit number of row):
         persons = Person.qs.fetch()  # list of namedtuples
         adults = Person.qs.filter(age__gte=18).fetch()
 
+Iterating queryset:
+    Queryset supports iterator interface, so it's possible to iterate results:
+
+    .. code:: python
+
+        for adult in Persons.qs.filter(age__gte=18):
+            print(adult.pk, adult.name)  # each item is a model instance
+
+
 :code:`create(**field_values)`:
     Create a new instance in db:
 
@@ -253,7 +262,7 @@ Slicing (limit number of row):
 
     .. code:: python
 
-        for book in Book.qs.select_related('author').all():
+        for book in Book.qs.select_related('author'):
             author = book.author  # without select_related call, each author will hit db
             print(book.title, author.name)
 

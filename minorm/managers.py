@@ -74,7 +74,7 @@ class QuerySet:
         update_data = OrderedDict()
         for key, value in kwargs.items():
             field = self.model._meta.check_field(key, with_pk=False)
-            adopted_value = field.adapt_value(value)
+            adopted_value = field.to_query_parameter(value)
             update_data[field.column_name] = adopted_value
 
         update_query = UpdateQuery(
@@ -143,7 +143,7 @@ class QuerySet:
         try:
             return fetched_items[item]
         except IndexError:
-            raise IndexError(f'{self.__class__.__name__} index out of range')
+            raise IndexError(f'{self.__class__.__name__} index out of range')  # pylint: disable=raise-missing-from
 
     def bulk_create(self, instances):
         model = self.model
@@ -196,7 +196,11 @@ class QuerySet:
                 related = self._related
 
             field = related.model._meta.check_field(field_name, with_pk=True)
-            adopted_value = field.to_query_parameter(value)
+            if lookup == 'in':
+                # value expected to be a sequence of field values
+                adopted_value = [field.to_query_parameter(option) for option in value]
+            else:
+                adopted_value = field.to_query_parameter(value)
             where_cond = WhereCondition.for_lookup(
                 f'{related.table_shortcut}.{field.column_name}', lookup, adopted_value
             )

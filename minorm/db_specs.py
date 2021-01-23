@@ -57,6 +57,14 @@ class SQLiteSpec(BaseSpec):
 
         return sqlite3
 
+    def create_connection(self):
+        sqlite3 = self.db_driver
+        connection = sqlite3.connect(
+            self.connection_url,
+            detect_types=sqlite3.PARSE_DECLTYPES,  # parse declared types and convert to a proper python value
+        )
+        return connection
+
     def set_autocommit(self, connection, autocommit):
         connection.isolation_level = None if autocommit else ''
 

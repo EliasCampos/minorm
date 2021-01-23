@@ -84,7 +84,7 @@ class IntegerField(Field):
         try:
             return self.number_type(value)
         except (TypeError, ValueError) as e:
-            raise type(e)(f'Field "{self.name}" expected a number but got {value}') from e
+            raise type(e)(f'Field "{self.name}" expected a number but got {value}.') from e
 
 
 class FloatField(IntegerField):
@@ -101,7 +101,7 @@ class BooleanField(Field):
         if value in (True, False):
             return bool(value)  # 1/0 are equal to True/False, bool() converts former to latter
 
-        raise ValueError(f'Field "{self.name}" value must be either True or False')
+        raise ValueError(f'Field "{self.name}" value must be either True or False.')
 
 
 class CharField(Field):
@@ -147,7 +147,7 @@ class DecimalField(Field):
         try:
             return decimal.Decimal(value)
         except (decimal.InvalidOperation, TypeError, ValueError) as e:
-            raise ValueError(f'Field "{self.name}" value must be a decimal number."') from e
+            raise ValueError(f'Field "{self.name}" value must be a decimal number.') from e
 
 
 class DateField(Field):
@@ -172,7 +172,7 @@ class DateField(Field):
             else:
                 return parsed_result.date()
 
-        raise TypeError(f'Field "{self.name}" should be of type date or iso-format string but got {value}')
+        raise TypeError(f'Field "{self.name}" should be of type date or iso-format string but got {value}.')
 
 
 class DateTimeField(Field):
@@ -198,7 +198,7 @@ class DateTimeField(Field):
                 'It must be in format YYYY-MM-DD [HH:MM[:ss[.uuuuuu]]].'
             )
 
-        raise TypeError(f'Field "{self.name}" should be of type datetime or iso-format string but got {value}')
+        raise TypeError(f'Field "{self.name}" should be of type datetime or iso-format string but got {value}.')
 
 
 class AutoField(Field):

@@ -94,7 +94,7 @@ class WhereCondition:
     def resolve_lookup(cls, lookup_key):
         """
         Takes a lookup string (like `foo__bar__lt`) and returns 2-tuple with lookup parts
-        split by last part (`foo__bar`, 'lt`).
+        split by last part ('foo__bar', 'lt').
 
         Is used to separate field name (with relations if it's provided) and lookup part itself.
         """

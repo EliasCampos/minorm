@@ -74,15 +74,22 @@ class Field:
 
 class IntegerField(Field):
     SQL_TYPE = 'INTEGER'
+    number_type = int
 
     def to_query_parameter(self, value):
+        assert self.number_type, 'number field should declare `number_type` class attribute'
         if value is None:
             return None
 
         try:
-            return int(value)
+            return self.number_type(value)
         except (TypeError, ValueError) as e:
             raise type(e)(f'Field "{self.name}" expected a number but got {value}') from e
+
+
+class FloatField(IntegerField):
+    SQL_TYPE = 'REAL'
+    number_type = float
 
 
 class BooleanField(Field):

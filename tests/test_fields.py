@@ -3,7 +3,16 @@ from decimal import Decimal
 from datetime import date, datetime
 
 from minorm.fields import (
-    Field, AutoField, BooleanField, CharField, DecimalField, DateField, DateTimeField, ForeignKey, IntegerField,
+    Field,
+    AutoField,
+    BooleanField,
+    CharField,
+    DateField,
+    DateTimeField,
+    DecimalField,
+    FloatField,
+    ForeignKey,
+    IntegerField,
 )
 
 
@@ -47,6 +56,20 @@ class TestIntegerField:
 
         with pytest.raises(expected_error_type, match=r'"test_field"\s+expected\s+a\s+number'):
             int_field.to_query_parameter(invalid_value)
+
+
+class TestFloatField:
+
+    def test_render_sql_type(self):
+        float_field = FloatField()
+        assert float_field.render_sql_type() == 'REAL'
+
+    def test_to_query_parameter(self):
+        float_field = FloatField()
+        assert float_field.to_query_parameter(None) is None
+        assert float_field.to_query_parameter(3.14) == 3.14
+        assert float_field.to_query_parameter("2.718") == 2.718
+        assert float_field.to_query_parameter(42) == 42
 
 
 class TestBooleanField:

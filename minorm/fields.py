@@ -1,5 +1,5 @@
-from datetime import datetime
-from decimal import Decimal
+import datetime
+import decimal
 
 
 class Field:
@@ -14,16 +14,8 @@ class Field:
         self._name = None
         self._model = None
 
-    def adapt(self, value):  # pylint: disable=no-self-use
-        return value
-
-    def adapt_value(self, value):
-        if value is None and self._null:
-            return None
-
-        return self.adapt(value)
-
     def to_query_parameter(self, value):  # pylint: disable=no-self-use
+        """Should take a python value and return data in a format that prepared for use as parameter in query."""
         return value
 
     def render_sql(self):
@@ -82,12 +74,34 @@ class Field:
 
 class IntegerField(Field):
     SQL_TYPE = 'INTEGER'
-    adapt = int
+    number_type = int
+
+    def to_query_parameter(self, value):
+        assert self.number_type, 'number field should declare `number_type` class attribute'
+        if value is None:
+            return None
+
+        try:
+            return self.number_type(value)
+        except (TypeError, ValueError) as e:
+            raise type(e)(f'Field "{self.name}" expected a number but got {value}.') from e
+
+
+class FloatField(IntegerField):
+    SQL_TYPE = 'REAL'
+    number_type = float
 
 
 class BooleanField(Field):
     SQL_TYPE = 'BOOLEAN'
-    adapt = bool
+
+    def to_query_parameter(self, value):
+        if value is None:
+            return None
+        if value in (True, False):
+            return bool(value)  # 1/0 are equal to True/False, bool() converts former to latter
+
+        raise ValueError(f'Field "{self.name}" value must be either True or False.')
 
 
 class CharField(Field):
@@ -100,10 +114,8 @@ class CharField(Field):
     def render_sql_type(self):
         return f'VARCHAR({self.max_length})'
 
-    def adapt(self, value):
-        if not value:
-            return ''
-        if isinstance(value, str):
+    def to_query_parameter(self, value):
+        if value is None or isinstance(value, str):
             return value
         if isinstance(value, bytes):
             return value.decode('utf-8')
@@ -121,30 +133,72 @@ class DecimalField(Field):
         self._max_digits = max_digits
         self._decimal_places = decimal_places
 
+        self._context = decimal.Context(prec=max_digits)
+
     def render_sql_type(self):
         return f'DECIMAL({self._max_digits}, {self._decimal_places})'
 
-    def adapt(self, value):
-        if not isinstance(value, Decimal):
-            if isinstance(value, float):
-                dec = self._decimal_places
-                return Decimal(round(value * (10 ** dec))) / Decimal(10 ** dec)
-            return Decimal(value)
-        return value
+    def to_query_parameter(self, value):
+        if value is None:
+            return None
+        if isinstance(value, float):
+            return self._context.create_decimal_from_float(value)
+
+        try:
+            return decimal.Decimal(value)
+        except (decimal.InvalidOperation, TypeError, ValueError) as e:
+            raise ValueError(f'Field "{self.name}" value must be a decimal number.') from e
+
+
+class DateField(Field):
+    SQL_TYPE = 'DATE'
+    FORMAT = '%Y-%m-%d'
+
+    def to_query_parameter(self, value):
+        if value is None:
+            return None
+        if isinstance(value, datetime.datetime):
+            return value.date()
+        if isinstance(value, datetime.date):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed_result = datetime.datetime.strptime(value, self.FORMAT)
+            except ValueError as e:
+                raise ValueError(
+                    f'"{value}" of field {self.name} has an invalid format.'
+                    'It must be in format YYYY-MM-DD.'
+                ) from e
+            else:
+                return parsed_result.date()
+
+        raise TypeError(f'Field "{self.name}" should be of type date or iso-format string but got {value}.')
 
 
 class DateTimeField(Field):
-    SQL_TYPE = 'DATETIME'
-    FORMATS = ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d')
+    SQL_TYPE = 'TIMESTAMP'
+    FORMATS = ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d')
 
-    def adapt(self, value):
+    def to_query_parameter(self, value):
+        if value is None:
+            return None
+        if isinstance(value, datetime.datetime):
+            return value
+        if isinstance(value, datetime.date):
+            return datetime.datetime(value.year, value.month, value.day)
         if isinstance(value, str):
             for fmt in self.FORMATS:
                 try:
-                    return datetime.strptime(value, fmt)
+                    return datetime.datetime.strptime(value, fmt)
                 except ValueError:
                     pass
-        return value
+
+            raise ValueError(
+                f'"{value}" of field {self.name} has an invalid format.'
+                'It must be in format YYYY-MM-DD [HH:MM[:ss[.uuuuuu]]].'
+            )
+
+        raise TypeError(f'Field "{self.name}" should be of type datetime or iso-format string but got {value}.')
 
 
 class AutoField(Field):
@@ -174,13 +228,10 @@ class ForeignKey(Field):
         super().__init__(pk=pk, null=null, unique=unique, default=default, column_name=column_name)
         self.to = to
 
-    def adapt(self, value):
+    def to_query_parameter(self, value):
         if isinstance(value, self.to):
             return value.pk
-        return self.to._meta.pk_field.adapt(value)
-
-    def to_query_parameter(self, value):
-        return value.pk if isinstance(value, self.to) else value
+        return self.to._meta.pk_field.to_query_parameter(value)
 
     def render_sql_type(self):
         ref_pk_field = self.to._meta.pk_field
@@ -188,9 +239,11 @@ class ForeignKey(Field):
         return f'{fk_type} REFERENCES {self.to._meta.table_name} ({ref_pk_field.name})'
 
     def __set__(self, instance, value):
-        setattr(instance, self.raw_fk_attr, self.to_query_parameter(value))
         if isinstance(value, self.to):
+            setattr(instance, self.raw_fk_attr, value.pk)
             setattr(instance, self.cached_instance_attr, value)
+        else:
+            setattr(instance, self.raw_fk_attr, value)
 
     def __get__(self, instance, owner):
         if not hasattr(instance, self.cached_instance_attr):

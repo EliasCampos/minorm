@@ -8,64 +8,6 @@ from minorm.managers import QuerySet
 from minorm.queries import CreateTableQuery, DeleteQuery, DropTableQuery, InsertQuery, UpdateQuery, SelectQuery
 
 
-class ModelSetupError(Exception):
-    pass
-
-
-class ModelMetaData:
-
-    def __init__(self, model_name, db, table_name, fields):
-        self._model_name = model_name
-        self._db = db
-        self._table_name = table_name
-        self._fields = fields
-
-    @property
-    def db(self):
-        return self._db
-
-    @property
-    def table_name(self):
-        return self._table_name
-
-    @property
-    def fields(self):
-        return list(self._fields)
-
-    @property
-    def pk_field(self):
-        return next((field for field in self.fields if field.is_pk))
-
-    @property
-    def name(self):
-        return self._model_name.lower()
-
-    @property
-    def column_names(self):
-        return [field.column_name for field in self.fields]
-
-    @property
-    def query_names(self):
-        return [field.query_name for field in self.fields]
-
-    def check_field(self, field_name, with_pk=False):
-        for field in self.fields:
-            if field.name == field_name and (not field.is_pk or with_pk):
-                return field
-
-        raise ValueError(f'{field_name} is not a valid field for model {self._model_name}.')
-
-    def get_field(self, field_name):
-        return self.check_field(field_name, with_pk=True)
-
-    def get_fk_field(self, field_name):
-        for field in self.fields:
-            if field.name == field_name and isinstance(field, ForeignKey):
-                return field
-
-        raise ValueError(f'{field_name} is not a valid foreign relation for model {self._model_name}.')
-
-
 class ModelMetaclass(type):
     # pylint: disable=no-value-for-parameter
 
@@ -84,7 +26,7 @@ class ModelMetaclass(type):
         # Extract primary key:
         pk_fields = [field for field in fields if field.is_pk]
         if len(pk_fields) > 1:
-            raise ModelSetupError('Model should have only one primary key.')
+            raise ModelSetupError(f'Model {name} should have only one primary key.')
         if pk_fields:
             pk_field = pk_fields[0]
         else:
@@ -98,7 +40,7 @@ class ModelMetaclass(type):
         if not pk_field.model:
             setattr(pk_field, '_model', model)
 
-        setattr(model, '_meta', ModelMetaData(model_name=model.__name__, db=db, table_name=table_name, fields=fields))
+        setattr(model, '_meta', ModelOptions(model_name=model.__name__, db=db, table_name=table_name, fields=fields))
 
         setattr(model, '_queryset_class', queryset_class)
 
@@ -177,7 +119,7 @@ class Model(metaclass=ModelMetaclass):
     def _adapt_values(self):
         for field in self.__class__._meta.fields:
             field_name = field.name
-            adapted_value = field.adapt_value(getattr(self, field_name))
+            adapted_value = field.to_query_parameter(getattr(self, field_name))
             setattr(self, field_name, adapted_value)
 
     def refresh_from_db(self):
@@ -211,3 +153,61 @@ class Model(metaclass=ModelMetaclass):
 
         setattr(self, model._meta.pk_field.name, None)
         return curr.rowcount
+
+
+class ModelSetupError(Exception):
+    pass
+
+
+class ModelOptions:
+
+    def __init__(self, model_name, db, table_name, fields):
+        self._model_name = model_name
+        self._db = db
+        self._table_name = table_name
+        self._fields = fields
+
+    @property
+    def db(self):
+        return self._db
+
+    @property
+    def table_name(self):
+        return self._table_name
+
+    @property
+    def fields(self):
+        return list(self._fields)
+
+    @property
+    def pk_field(self):
+        return next((field for field in self.fields if field.is_pk))
+
+    @property
+    def name(self):
+        return self._model_name.lower()
+
+    @property
+    def column_names(self):
+        return [field.column_name for field in self.fields]
+
+    @property
+    def query_names(self):
+        return [field.query_name for field in self.fields]
+
+    def check_field(self, field_name, with_pk=False):
+        for field in self.fields:
+            if field.name == field_name and (not field.is_pk or with_pk):
+                return field
+
+        raise ValueError(f'{field_name} is not a valid field for model {self._model_name}.')
+
+    def get_field(self, field_name):
+        return self.check_field(field_name, with_pk=True)
+
+    def get_fk_field(self, field_name):
+        for field in self.fields:
+            if field.name == field_name and isinstance(field, ForeignKey):
+                return field
+
+        raise ValueError(f'{field_name} is not a valid foreign relation for model {self._model_name}.')

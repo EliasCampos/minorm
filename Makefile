@@ -1,6 +1,6 @@
 VENV := $(shell echo $${VIRTUAL_ENV-.venv})
 
-all: init test
+all: init lint test
 
 init:
 	$(VENV)/bin/pip install tox

@@ -12,6 +12,7 @@ build/
 dist/
 minorm.egg-info/*
 MANIFEST
+out/
 
 # tox:
 .tox/

@@ -11,7 +11,7 @@ class Connector:
     def __init__(self):
         self._connection = None
         self._db_spec = None
-        self._autocommit = False
+        self._autocommit = None
 
     def connect(self, db_spec):
         self.disconnect()

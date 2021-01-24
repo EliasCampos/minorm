@@ -56,22 +56,6 @@ class ModelMetaclass(type):
     def qs(cls):
         return cls._queryset_class(model=cls)
 
-    def render_sql(cls):
-        field_params = [field.render_sql() for field in cls._meta.fields]
-        create_query = CreateTableQuery(table_name=cls._meta.table_name, params=field_params)
-        return create_query.render_sql()
-
-    def create_table(cls):
-        raw_sql = cls.render_sql()
-        with cls._meta.db.cursor() as curr:
-            curr.execute(raw_sql)
-
-    def drop_table(cls):
-        drop_query = DropTableQuery(table_name=cls._meta.table_name)
-        raw_sql = drop_query.render_sql()
-        with cls._meta.db.cursor() as curr:
-            curr.execute(raw_sql)
-
 
 class Model(metaclass=ModelMetaclass):
 
@@ -116,12 +100,6 @@ class Model(metaclass=ModelMetaclass):
         if is_creation:
             setattr(self, model._meta.pk_field.name, curr.lastrowid)
 
-    def _adapt_values(self):
-        for field in self.__class__._meta.fields:
-            field_name = field.name
-            adapted_value = field.to_query_parameter(getattr(self, field_name))
-            setattr(self, field_name, adapted_value)
-
     def refresh_from_db(self):
         if not self.pk:
             return
@@ -153,6 +131,31 @@ class Model(metaclass=ModelMetaclass):
 
         setattr(self, model._meta.pk_field.name, None)
         return curr.rowcount
+
+    @classmethod
+    def render_sql(cls):
+        field_params = [field.render_sql() for field in cls._meta.fields]
+        create_query = CreateTableQuery(table_name=cls._meta.table_name, params=field_params)
+        return create_query.render_sql()
+
+    @classmethod
+    def create_table(cls):
+        raw_sql = cls.render_sql()
+        with cls._meta.db.cursor() as curr:
+            curr.execute(raw_sql)
+
+    @classmethod
+    def drop_table(cls):
+        drop_query = DropTableQuery(table_name=cls._meta.table_name)
+        raw_sql = drop_query.render_sql()
+        with cls._meta.db.cursor() as curr:
+            curr.execute(raw_sql)
+
+    def _adapt_values(self):
+        for field in self.__class__._meta.fields:
+            field_name = field.name
+            adapted_value = field.to_query_parameter(getattr(self, field_name))
+            setattr(self, field_name, adapted_value)
 
 
 class ModelSetupError(Exception):
@@ -190,10 +193,6 @@ class ModelOptions:
     @property
     def column_names(self):
         return [field.column_name for field in self.fields]
-
-    @property
-    def query_names(self):
-        return [field.query_name for field in self.fields]
 
     def check_field(self, field_name, with_pk=False):
         for field in self.fields:

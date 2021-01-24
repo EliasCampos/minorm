@@ -1,4 +1,3 @@
-from collections import namedtuple
 
 
 LOOKUP_SEPARATOR = '__'
@@ -133,9 +132,13 @@ class WhereCondition:
         return new_where
 
 
-class OrderByExpression(namedtuple('OrderByExpression', 'value, ordering')):
+class OrderByExpression:
     ASC = 'ASC'
     DESC = 'DESC'
+
+    def __init__(self, value, ordering):
+        self.value = value
+        self.ordering = ordering
 
     @classmethod
     def from_field_name(cls, field_name):
@@ -150,6 +153,12 @@ class OrderByExpression(namedtuple('OrderByExpression', 'value, ordering')):
 
     def __str__(self):
         return f'{self.value} {self.ordering}'
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+
+        return self.value == other.value and self.ordering == other.ordering
 
 
 class JoinExpression:

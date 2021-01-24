@@ -31,7 +31,7 @@ class WhereCondition:
         ('contains', '%{0}%')
     )
 
-    MULTIPLE_VALUE_OPS = (IN, )
+    MULTIPLE_VALUE_OPS = (IN,)
 
     def __init__(self, field, op, value, no_escape=False):
         self.field = field

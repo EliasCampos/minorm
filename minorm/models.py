@@ -56,6 +56,22 @@ class ModelMetaclass(type):
     def qs(cls):
         return cls._queryset_class(model=cls)
 
+    def render_sql(cls):
+        field_params = [field.render_sql() for field in cls._meta.fields]
+        create_query = CreateTableQuery(table_name=cls._meta.table_name, params=field_params)
+        return create_query.render_sql()
+
+    def create_table(cls):
+        raw_sql = cls.render_sql()
+        with cls._meta.db.cursor() as curr:
+            curr.execute(raw_sql)
+
+    def drop_table(cls):
+        drop_query = DropTableQuery(table_name=cls._meta.table_name)
+        raw_sql = drop_query.render_sql()
+        with cls._meta.db.cursor() as curr:
+            curr.execute(raw_sql)
+
 
 class Model(metaclass=ModelMetaclass):
 
@@ -131,25 +147,6 @@ class Model(metaclass=ModelMetaclass):
 
         setattr(self, model._meta.pk_field.name, None)
         return curr.rowcount
-
-    @classmethod
-    def render_sql(cls):
-        field_params = [field.render_sql() for field in cls._meta.fields]
-        create_query = CreateTableQuery(table_name=cls._meta.table_name, params=field_params)
-        return create_query.render_sql()
-
-    @classmethod
-    def create_table(cls):
-        raw_sql = cls.render_sql()
-        with cls._meta.db.cursor() as curr:
-            curr.execute(raw_sql)
-
-    @classmethod
-    def drop_table(cls):
-        drop_query = DropTableQuery(table_name=cls._meta.table_name)
-        raw_sql = drop_query.render_sql()
-        with cls._meta.db.cursor() as curr:
-            curr.execute(raw_sql)
 
     def _adapt_values(self):
         for field in self.__class__._meta.fields:

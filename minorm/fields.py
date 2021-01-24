@@ -106,8 +106,7 @@ class BooleanField(Field):
 
 class CharField(Field):
 
-    def __init__(self, pk=False, null=False, unique=False, default=None, column_name=None, **extra_kwargs):
-        max_length = extra_kwargs.pop('max_length')
+    def __init__(self, max_length, pk=False, null=False, unique=False, default=None, column_name=None):
         super().__init__(pk=pk, null=null, unique=unique, default=default, column_name=column_name)
         self.max_length = min(int(max_length), 255)
 
@@ -124,10 +123,8 @@ class CharField(Field):
 
 class DecimalField(Field):
 
-    def __init__(self, pk=False, null=False, unique=False, default=None, column_name=None, **extra_kwargs):
-        max_digits = extra_kwargs.pop('max_digits')
-        decimal_places = extra_kwargs.pop('decimal_places')
-
+    def __init__(self, max_digits, decimal_places, pk=False, null=False, unique=False, default=None, column_name=None):
+        # pylint: disable=too-many-arguments
         super().__init__(pk, null=null, unique=unique, default=default, column_name=column_name)
 
         self._max_digits = max_digits

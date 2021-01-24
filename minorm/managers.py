@@ -13,7 +13,7 @@ class QuerySet:
         self.model = model
 
         self._where = None
-        self._order_by = set()
+        self._order_by = []
         self._limit = None
 
         self._related = RelationNode(base_model=self.model)
@@ -33,10 +33,12 @@ class QuerySet:
         return self._clone()
 
     def order_by(self, *args):
+        order_by_values = []
         for field_name in args:
             order_exp = OrderByExpression.from_field_name(field_name)
             field = self.model._meta.check_field(order_exp.value, with_pk=True)
-            self._order_by.add(OrderByExpression(value=field.query_name, ordering=order_exp.ordering))
+            order_by_values.append(OrderByExpression(value=field.query_name, ordering=order_exp.ordering))
+        self._order_by = order_by_values
         return self._clone()
 
     def values(self, *args):
@@ -79,7 +81,7 @@ class QuerySet:
 
         update_query = UpdateQuery(
             table_name=self.model._meta.table_name,
-            fields=update_data.keys(),
+            fields=tuple(update_data.keys()),
             where=self._where,
         )
         raw_sql = update_query.render_sql(self.model._meta.db.spec)
@@ -178,7 +180,7 @@ class QuerySet:
         new_qs = self.__class__(model=self.model)
         if self._where:
             new_qs._where = self._where.clone()
-        new_qs._order_by = set(self._order_by)
+        new_qs._order_by = list(self._order_by)
         new_qs._limit = self._limit
         new_qs._related = self._related.clone()
         new_qs._values_mapping = OrderedDict(self._values_mapping)

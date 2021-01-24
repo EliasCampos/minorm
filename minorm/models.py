@@ -116,12 +116,6 @@ class Model(metaclass=ModelMetaclass):
         if is_creation:
             setattr(self, model._meta.pk_field.name, curr.lastrowid)
 
-    def _adapt_values(self):
-        for field in self.__class__._meta.fields:
-            field_name = field.name
-            adapted_value = field.to_query_parameter(getattr(self, field_name))
-            setattr(self, field_name, adapted_value)
-
     def refresh_from_db(self):
         if not self.pk:
             return
@@ -153,6 +147,12 @@ class Model(metaclass=ModelMetaclass):
 
         setattr(self, model._meta.pk_field.name, None)
         return curr.rowcount
+
+    def _adapt_values(self):
+        for field in self.__class__._meta.fields:
+            field_name = field.name
+            adapted_value = field.to_query_parameter(getattr(self, field_name))
+            setattr(self, field_name, adapted_value)
 
 
 class ModelSetupError(Exception):
@@ -190,10 +190,6 @@ class ModelOptions:
     @property
     def column_names(self):
         return [field.column_name for field in self.fields]
-
-    @property
-    def query_names(self):
-        return [field.query_name for field in self.fields]
 
     def check_field(self, field_name, with_pk=False):
         for field in self.fields:

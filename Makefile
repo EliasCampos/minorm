@@ -1,6 +1,6 @@
 VENV := $(shell echo $${VIRTUAL_ENV-.venv})
 
-all: init lint test
+all: init lint types test
 
 init:
 	$(VENV)/bin/pip install tox
@@ -10,3 +10,6 @@ test: init
 
 lint: init
 	$(VENV)/bin/tox -e lint
+
+types: init
+	$(VENV)/bin/tox -e types

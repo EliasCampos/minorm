@@ -34,4 +34,7 @@ setup(
         'Programming Language :: Python :: 3.7',
     ],
     packages=['minorm'],
+    package_data={
+        'minorm': ['*.pyi'],
+    }
 )

@@ -50,7 +50,7 @@ class TestQuerySet:
 
         result = qs.order_by('-age', 'name')
 
-        assert result._order_by == {OrderByExpression('person.age', 'DESC'), OrderByExpression('person.name', 'ASC')}
+        assert result._order_by == [OrderByExpression('person.age', 'DESC'), OrderByExpression('person.name', 'ASC')]
 
     def test_filter_by_pk(self, test_model):
         qs1 = test_model.qs.filter(pk=1)

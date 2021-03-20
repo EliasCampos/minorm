@@ -1,8 +1,6 @@
 import datetime
 import decimal
 
-from minorm.expressions import LOOKUP_SEPARATOR, WhereCondition
-
 
 class Field:
     SQL_TYPE = None

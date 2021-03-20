@@ -1,6 +1,8 @@
 import datetime
 import decimal
 
+from minorm.expressions import LOOKUP_SEPARATOR, WhereCondition
+
 
 class Field:
     SQL_TYPE = None
@@ -70,6 +72,35 @@ class Field:
     @property
     def query_name(self):
         return f'{self.model._meta.table_name}.{self.column_name}'
+
+    @classmethod
+    def register_lookup(cls, lookup_class):
+        if not hasattr(cls, '_lookup_classes'):
+            cls._lookup_classes = []
+        cls._lookup_classes.append(lookup_class)
+
+    def resolve_lookup(self, lookup_name, value, table_name):
+        """
+        Takes a lookup string (like `foo__bar__lt`) and returns where expression for the lookup.
+        """
+        field_name = f'{table_name}.{self.column_name}'
+        lookup = self._get_lookup(lookup_name)
+        if not lookup:
+            return None
+
+        if lookup.name == 'in':
+            adopted_value = [self.to_query_parameter(option) for option in value]
+        else:
+            adopted_value = self.to_query_parameter(value)
+
+        return lookup.process(field_name, adopted_value)
+
+    def _get_lookup(self, lookup_name):
+        for lookup_class in getattr(self, '_lookup_classes', []):
+            if lookup_class.matches(lookup_name):
+                return lookup_class()
+
+        return None
 
 
 class IntegerField(Field):

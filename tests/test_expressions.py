@@ -52,19 +52,6 @@ class TestWhereCondition:
         assert str(not_and) == "NOT (x = {0} AND y = {0})"
         assert not_and.values() == ('3', '5')
 
-    @pytest.mark.parametrize('lookup', ['lt', 'lte', 'gt',  'gte', 'in', 'neq'])
-    def test_resolve_lookup(self, lookup):
-        field = f'test__{lookup}'
-        assert WhereCondition.resolve_lookup(field) == ('test', lookup)
-
-    def test_resolve_lookup_eq(self):
-        field = f'test'
-        assert WhereCondition.resolve_lookup(field) == ('test', None)
-
-    def test_resolve_lookup_eq_case(self):
-        invalid_lookup = 'foobar'
-        assert WhereCondition.resolve_lookup(invalid_lookup) == ('foobar', None)
-
     def test_clone(self):
         where = WhereCondition(field='x', op='=', value='3') | WhereCondition(field='y', op='=', value='5')
         clone_where = where.clone()

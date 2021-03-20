@@ -22,8 +22,7 @@ Connecting to sqlite database:
 
 .. code:: python
 
-    from minorm.connectors import connector
-    from minorm.db_specs import SQLiteSpec
+    from minorm import connector, SQLiteSpec
 
     connector.connect(SQLiteSpec('example.db'))
 
@@ -31,8 +30,7 @@ Connecting to postgresql database (requires psycopg2 to be installed):
 
 .. code:: python
 
-    from minorm.connectors import connector
-    from minorm.db_specs import PostgreSQLSpec
+    from minorm import connector, PostgreSQLSpec
 
     connection_string = "host=localhost port=5432 dbname=mydb user=admin password=secret"
     connector.connect(PostgreSQLSpec(connection_string))
@@ -50,7 +48,7 @@ Create a model class that represents a single table in a database:
 
 .. code:: python
 
-    from minorm.models import Model
+    from minorm import Model
     from minorm.fields import CharField, IntegerField
 
     class Person(Model):

@@ -90,38 +90,6 @@ class WhereCondition:
         self._negated = not self._negated
         return self.clone()
 
-    @classmethod
-    def resolve_lookup(cls, lookup_key):
-        """
-        Takes a lookup string (like `foo__bar__lt`) and returns 2-tuple with lookup parts
-        split by last part ('foo__bar', 'lt').
-
-        Is used to separate field name (with relations if it's provided) and lookup part itself.
-        """
-        *rest, lookup = lookup_key.split(LOOKUP_SEPARATOR)
-
-        lookups = dict(cls.LOOKUP_MAPPING)
-        if lookup not in lookups:
-            lookup = None
-            field_name = lookup_key
-        else:
-            field_name = LOOKUP_SEPARATOR.join(rest)
-        return field_name, lookup
-
-    @classmethod
-    def for_lookup(cls, field_name, lookup, value):
-        if lookup is None:
-            op = cls.EQ
-        else:
-            lookup_mapping = dict(cls.LOOKUP_MAPPING)
-            op = lookup_mapping[lookup]
-
-        if op == cls.LIKE:
-            like_patterns = dict(cls.LIKE_PATTERNS)
-            value = like_patterns[lookup].format(value)
-
-        return cls(field=field_name, op=op, value=value)
-
     # pylint: disable=protected-access
     def clone(self):
         new_where = self.__class__(field=self.field, op=self.op, value=self.value, no_escape=self.no_escape)

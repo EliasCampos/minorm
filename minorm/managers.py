@@ -188,22 +188,10 @@ class QuerySet:
         kwargs = self._check_pk_lookups(kwargs)
         where_conds = list(args)
         for key, value in kwargs.items():
-            field_part, lookup = WhereCondition.resolve_lookup(key)
-            *rel_lookups, field_name = field_part.split(LOOKUP_SEPARATOR)
-            if rel_lookups:
-                related = self._related.resolve_relation(rel_lookups)
-            else:
-                related = self._related
-
-            field = related.model._meta.check_field(field_name, with_pk=True)
-            if lookup == 'in':
-                # value expected to be a sequence of field values
-                adopted_value = [field.to_query_parameter(option) for option in value]
-            else:
-                adopted_value = field.to_query_parameter(value)
-            where_cond = WhereCondition.for_lookup(
-                f'{related.table_shortcut}.{field.column_name}', lookup, adopted_value
-            )
+            lookup_parts = key.split(LOOKUP_SEPARATOR)
+            where_cond = self._check_lookup_condition(lookup_parts, value)
+            if not where_cond:
+                where_cond = self._get_field_equal_condition(lookup_parts, value)
             where_conds.append(where_cond)
 
         result = functools.reduce(operator.and_, where_conds) if where_conds else None
@@ -261,6 +249,25 @@ class QuerySet:
 
         instance, __ = self._related.row_to_instance(row, is_namedtuple=is_namedtuple)
         return instance
+
+    def _check_lookup_condition(self, lookup_parts, value):
+        if len(lookup_parts) < 2:
+            return None
+
+        *rel_lookups, field_name, lookup_name = lookup_parts
+        related = self._related.resolve_relation(rel_lookups) if rel_lookups else self._related
+
+        field = related.model._meta.check_field(field_name, with_pk=True)
+        return field.resolve_lookup(lookup_name, value, table_name=related.table_shortcut)
+
+    def _get_field_equal_condition(self, lookup_parts, value):
+        *rel_lookups, field_name = lookup_parts
+        related = self._related.resolve_relation(rel_lookups) if rel_lookups else self._related
+        field = related.model._meta.check_field(field_name, with_pk=True)
+
+        column_name = f'{related.table_shortcut}.{field.column_name}'
+        adopted_value = field.to_query_parameter(value)
+        return WhereCondition(field=column_name, op='=', value=adopted_value)
 
 
 class RelationNode:

@@ -33,6 +33,35 @@ class TestField:
         non_unique = Field(null=True, unique=False, column_name='test', default=None)
         assert non_unique.render_sql() == 'test INTEGER'
 
+    @pytest.mark.parametrize('lookup_name, operator', [
+        ('lt', '<'),
+        ('lte', '<='),
+        ('gt', '>'),
+        ('gte', '>='),
+        ('neq', '!='),
+    ])
+    def test_resolve_lookup(self, lookup_name, operator):
+        field = Field(column_name='test_column')
+
+        result = field.resolve_lookup(lookup_name, 'test_value', 'test_table')
+        assert result.field == 'test_table.test_column'
+        assert result.op == operator
+        assert result.value == 'test_value'
+
+    def test_resolve_lookup_in(self):
+        field = Field(column_name='test_column')
+
+        result = field.resolve_lookup('in', ('foo', 'bar'), 'test_table')
+        assert result.field == 'test_table.test_column'
+        assert result.op == 'IN'
+        assert result.value == ['foo', 'bar']
+
+    def test_resolve_wrong_lookup(self):
+        field = Field(column_name='test_column')
+
+        result = field.resolve_lookup('NOWAY', 'test_value', 'test_table')
+        assert result is None
+
 
 class TestIntegerField:
 
